@@ -1,0 +1,446 @@
+generator client {
+  provider   = "prisma-client-js"
+  engineType = "library"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------
+// ENUMS
+// ---------------------------------------------------------
+
+enum RoleType {
+  ADMIN
+  USER
+  GUEST
+}
+
+enum MeetingStatus {
+  SCHEDULED
+  ONGOING
+  COMPLETED
+  CANCELLED
+}
+
+enum SubscriptionTier {
+  FREE
+  PRO
+  ENTERPRISE
+}
+
+// ---------------------------------------------------------
+// IDENTITY & ACCESS
+// ---------------------------------------------------------
+
+model User {
+  id              String    @id @default(uuid())
+  email           String    @unique
+  passwordHash    String?
+  authProvider    String? // 'local', 'google', 'github', 'microsoft'
+  isEmailVerified Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime? // Soft delete
+
+  profile       Profile?
+  settings      Setting?
+  sessions      Session[]
+  devices       Device[]
+  userRoles     UserRole[]
+  teamMembers   TeamMember[]
+  subscriptions Subscription[]
+  payments      Payment[]
+  notifications Notification[]
+  activityLogs  ActivityLog[]
+
+  hostedMeetings Meeting[]            @relation("MeetingHost")
+  participations MeetingParticipant[]
+  contacts       Contact[]            @relation("UserContacts")
+  contactOf      Contact[]            @relation("ContactUsers")
+  sentInvitations MeetingInvitation[] @relation("SentInvitations")
+  receivedInvitations MeetingInvitation[] @relation("ReceivedInvitations")
+  callHistories  CallHistory[]
+
+  @@index([email])
+}
+
+model Profile {
+  id        String    @id @default(uuid())
+  userId    String    @unique
+  firstName String
+  lastName  String
+  avatarUrl String?
+  bio       String?
+  timezone  String    @default("UTC")
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Role {
+  id          String    @id @default(uuid())
+  name        String    @unique
+  description String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  userRoles   UserRole[]
+  permissions RolePermission[]
+}
+
+model Permission {
+  id          String    @id @default(uuid())
+  action      String    @unique // e.g., 'meeting:create', 'user:delete'
+  description String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  roles RolePermission[]
+}
+
+model UserRole {
+  id        String   @id @default(uuid())
+  userId    String
+  roleId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId])
+}
+
+model RolePermission {
+  id           String   @id @default(uuid())
+  roleId       String
+  permissionId String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+}
+
+model Session {
+  id           String    @id @default(uuid())
+  userId       String
+  refreshToken String    @unique
+  ipAddress    String?
+  userAgent    String?
+  expiresAt    DateTime
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, refreshToken])
+}
+
+model Device {
+  id         String    @id @default(uuid())
+  userId     String
+  deviceInfo String
+  lastSeen   DateTime  @default(now())
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  deletedAt  DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ---------------------------------------------------------
+// ORGANIZATION
+// ---------------------------------------------------------
+
+model Organization {
+  id        String    @id @default(uuid())
+  name      String
+  domain    String?   @unique
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  teams Team[]
+}
+
+model Team {
+  id             String    @id @default(uuid())
+  organizationId String
+  name           String
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  members      TeamMember[]
+}
+
+model TeamMember {
+  id        String   @id @default(uuid())
+  teamId    String
+  userId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, userId])
+}
+
+// ---------------------------------------------------------
+// CORE APP (MEETINGS & CHAT)
+// ---------------------------------------------------------
+
+model Meeting {
+  id           String        @id @default(uuid())
+  meetingCode  String?       @unique // e.g., LVA-4H8K-T9PX
+  hostId       String
+  title        String
+  description  String?
+  status       MeetingStatus @default(SCHEDULED)
+  scheduledFor DateTime?
+  startedAt    DateTime?
+  endedAt      DateTime?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  deletedAt    DateTime?
+
+  host         User                 @relation("MeetingHost", fields: [hostId], references: [id])
+  participants MeetingParticipant[]
+  messages     Message[]
+  files        File[]
+  recordings   Recording[]
+  invitations  MeetingInvitation[]
+  callHistories CallHistory[]
+
+  @@index([hostId])
+}
+
+model MeetingParticipant {
+  id                  String    @id @default(uuid())
+  meetingId           String
+  userId              String
+  joinedAt            DateTime  @default(now())
+  leftAt              DateTime?
+  isMuted             Boolean   @default(false)
+  isVideoEnabled      Boolean   @default(true)
+  preferredLanguageId String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  deletedAt           DateTime?
+
+  meeting           Meeting         @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  user              User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  preferredLanguage Language?       @relation(fields: [preferredLanguageId], references: [id])
+  speechHistories   SpeechHistory[]
+
+  @@unique([meetingId, userId])
+}
+
+model Message {
+  id                 String    @id @default(uuid())
+  meetingId          String
+  senderId           String
+  content            String
+  originalLanguageId String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  deletedAt          DateTime?
+
+  meeting      Meeting              @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  translations TranslationHistory[]
+
+  @@index([meetingId, senderId])
+}
+
+model File {
+  id         String    @id @default(uuid())
+  meetingId  String
+  uploaderId String
+  fileUrl    String
+  fileName   String
+  fileSize   Int
+  mimeType   String
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  deletedAt  DateTime?
+
+  meeting Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+}
+
+model Recording {
+  id        String    @id @default(uuid())
+  meetingId String
+  url       String
+  duration  Int?
+  sizeBytes Int?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  meeting Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+}
+
+// ---------------------------------------------------------
+// AI & TRANSLATION
+// ---------------------------------------------------------
+
+model Language {
+  id        String   @id @default(uuid())
+  code      String   @unique // e.g., 'en', 'es', 'ja'
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  participants MeetingParticipant[]
+}
+
+model TranslationHistory {
+  id               String   @id @default(uuid())
+  messageId        String
+  targetLanguageId String
+  translatedText   String
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+}
+
+model SpeechHistory {
+  id            String   @id @default(uuid())
+  participantId String
+  transcription String
+  confidence    Float
+  durationMs    Int
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  participant MeetingParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+}
+
+// ---------------------------------------------------------
+// SYSTEM & BILLING
+// ---------------------------------------------------------
+
+model Subscription {
+  id        String           @id @default(uuid())
+  userId    String
+  tier      SubscriptionTier @default(FREE)
+  startDate DateTime
+  endDate   DateTime?
+  isActive  Boolean          @default(true)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  deletedAt DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Payment {
+  id            String   @id @default(uuid())
+  userId        String
+  amount        Float
+  currency      String   @default("USD")
+  status        String // 'SUCCESS', 'FAILED', 'PENDING'
+  transactionId String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model Notification {
+  id        String    @id @default(uuid())
+  userId    String
+  type      String // 'MEETING_INVITE', 'SYSTEM_ALERT'
+  content   String
+  isRead    Boolean   @default(false)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model ActivityLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  action    String
+  details   Json?
+  ipAddress String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User? @relation(fields: [userId], references: [id])
+}
+
+model Setting {
+  id                 String   @id @default(uuid())
+  userId             String   @unique
+  theme              String   @default("dark")
+  emailNotifications Boolean  @default(true)
+  pushNotifications  Boolean  @default(true)
+  defaultLanguageId  String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ---------------------------------------------------------
+// NEW MODELS: CONTACTS, INVITATIONS, HISTORY
+// ---------------------------------------------------------
+
+model Contact {
+  id         String   @id @default(uuid())
+  userId     String
+  contactId  String
+  isFavorite Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user    User @relation("UserContacts", fields: [userId], references: [id], onDelete: Cascade)
+  contact User @relation("ContactUsers", fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, contactId])
+}
+
+model MeetingInvitation {
+  id         String   @id @default(uuid())
+  meetingId  String
+  senderId   String
+  receiverId String
+  status     String   @default("PENDING") // PENDING, ACCEPTED, DECLINED
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  meeting  Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  sender   User    @relation("SentInvitations", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver User    @relation("ReceivedInvitations", fields: [receiverId], references: [id], onDelete: Cascade)
+}
+
+model CallHistory {
+  id            String   @id @default(uuid())
+  userId        String
+  meetingId     String
+  type          String   // INCOMING, OUTGOING, MISSED
+  duration      Int?     // in seconds
+  qualityRating Int?     // 1-5
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  meeting Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+}

@@ -1,0 +1,127 @@
+.history-tab {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  color: #FFF;
+}
+
+.history-header {
+  margin-bottom: 24px;
+}
+
+.history-header h2 {
+  font-size: 1.5rem;
+  font-weight: 500;
+  margin: 0 0 8px 0;
+}
+
+.history-header p {
+  color: #A0A0A0;
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.history-list {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.history-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  transition: all 0.3s ease;
+}
+
+.history-card:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.1);
+  transform: translateY(-2px);
+}
+
+.history-info {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.history-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+}
+
+.history-icon.incoming {
+  background: rgba(0, 255, 163, 0.1);
+  color: #00FFA3;
+}
+
+.history-icon.outgoing {
+  background: rgba(110, 86, 255, 0.1);
+  color: #6E56FF;
+}
+
+.history-details h4 {
+  margin: 0 0 4px 0;
+  font-size: 1.1rem;
+  font-weight: 500;
+}
+
+.history-details p {
+  margin: 0;
+  color: #A0A0A0;
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.history-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.summary-btn {
+  background: rgba(110, 86, 255, 0.1);
+  color: #6E56FF;
+  border: 1px solid rgba(110, 86, 255, 0.2);
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.summary-btn:hover {
+  background: rgba(110, 86, 255, 0.2);
+}
+
+.empty-history {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #A0A0A0;
+  text-align: center;
+}
+
+.empty-history svg {
+  margin-bottom: 16px;
+  color: #444;
+}

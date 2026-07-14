@@ -1,0 +1,82 @@
+.settings-tab {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  color: #FFF;
+}
+
+.settings-header {
+  margin-bottom: 24px;
+}
+
+.settings-header h2 {
+  font-size: 1.5rem;
+  font-weight: 500;
+  margin: 0 0 8px 0;
+}
+
+.settings-header p {
+  color: #A0A0A0;
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.settings-content {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.settings-section {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  padding: 24px;
+}
+
+.settings-section h3 {
+  margin: 0 0 16px 0;
+  font-size: 1.1rem;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 0.9rem;
+  color: #A0A0A0;
+}
+
+.form-group input,
+.form-group select {
+  width: 100%;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 12px 16px;
+  border-radius: 8px;
+  color: #FFF;
+  font-size: 1rem;
+  transition: all 0.2s ease;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+  outline: none;
+  border-color: #6E56FF;
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.settings-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+}

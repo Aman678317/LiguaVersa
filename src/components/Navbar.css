@@ -1,0 +1,82 @@
+.navbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  padding: 24px 0;
+  z-index: 100;
+  transition: padding 0.3s ease, background 0.3s ease;
+}
+
+.navbar.glass {
+  padding: 16px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.nav-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.logo-container {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+}
+
+.logo-icon {
+  color: var(--accent-color);
+  filter: drop-shadow(0 0 8px var(--accent-color));
+}
+
+.logo-text {
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+}
+
+.logo-highlight {
+  color: var(--primary-color);
+}
+
+.nav-links {
+  display: flex;
+  gap: 32px;
+}
+
+.nav-links a {
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: 0.95rem;
+  font-weight: 500;
+  transition: color 0.2s ease, text-shadow 0.2s ease;
+}
+
+.nav-links a:hover {
+  color: var(--text-main);
+  text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+}
+
+.nav-actions {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.nav-login {
+  padding: 10px 24px;
+  font-size: 0.95rem;
+}
+
+.nav-signup {
+  padding: 10px 24px;
+  font-size: 0.95rem;
+}
+
+@media (max-width: 992px) {
+  .nav-links {
+    display: none;
+  }
+}

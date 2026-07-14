@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: linguaverse-backend
+    env: node
+    plan: free
+    buildCommand: npm install && npx prisma generate && npm run build
+    startCommand: npm run start:prod
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: DATABASE_URL
+        sync: false # User will input their Supabase URL in Render Dashboard
