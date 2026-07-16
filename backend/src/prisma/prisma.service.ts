@@ -28,4 +28,6 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
   get meetingInvitation() { return this.client.meetingInvitation; }
   get callHistory() { return this.client.callHistory; }
   get profile() { return this.client.profile; }
+  get recording() { return this.client.recording; }
+  get setting() { return this.client.setting; }
 }

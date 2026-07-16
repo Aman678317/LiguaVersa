@@ -16,7 +16,7 @@ export class RecordingController {
   @UseGuards(JwtAuthGuard)
   @Post('upload-chunk')
   @UseInterceptors(FileInterceptor('chunk'))
-  async uploadChunk(@UploadedFile() file: Express.Multer.File, @Body('meetingId') meetingId: string) {
+  async uploadChunk(@UploadedFile() file: any, @Body('meetingId') meetingId: string) {
     if (!file) throw new BadRequestException('Chunk is missing');
     if (!meetingId) throw new BadRequestException('Meeting ID is missing');
 

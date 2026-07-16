@@ -44,11 +44,17 @@ export class TranslationService {
     try {
       const messages = await this.prisma.message.findMany({
         where: { meetingId },
-        include: { sender: true },
         orderBy: { createdAt: 'asc' }
       });
-
-      const transcript = messages.map(m => `${m.sender?.email || 'User'}: ${m.content}`).join('\n');
+      
+      const userIds = [...new Set(messages.map(m => m.senderId))];
+      const users = await this.prisma.user.findMany({
+        where: { id: { in: userIds } },
+        select: { id: true, email: true }
+      });
+      const userMap = new Map(users.map(u => [u.id, u.email]));
+      
+      const transcript = messages.map(m => `${userMap.get(m.senderId) || 'User'}: ${m.content}`).join('\n');
       
       const prompt = `Analyze the following meeting transcript and provide a JSON response with the following keys: "summary" (a short paragraph), "keyPoints" (array of strings), "actionItems" (array of strings), and "sentiment" (a string).\n\nTranscript:\n${transcript || 'No messages were sent in this meeting.'}`;
       
