@@ -1,12 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class TranslationService {
   private ai: GoogleGenerativeAI;
   private model: any;
 
-  constructor() {
+  constructor(private prisma: PrismaService) {
     const apiKey = process.env.GEMINI_API_KEY || '';
     if (apiKey) {
       this.ai = new GoogleGenerativeAI(apiKey);
@@ -27,6 +28,41 @@ export class TranslationService {
     } catch (error) {
       console.error("Gemini Translation Error:", error);
       return `[Error: Translation Failed] ${text}`;
+    }
+  }
+
+  async generateMeetingSummary(meetingId: string): Promise<any> {
+    if (!this.model) {
+      return {
+        summary: "Mock summary since Gemini is not configured.",
+        keyPoints: ["Discussed project updates", "Planned next steps"],
+        actionItems: ["Deploy to production", "Fix UI bugs"],
+        sentiment: "Neutral"
+      };
+    }
+
+    try {
+      const messages = await this.prisma.message.findMany({
+        where: { meetingId },
+        include: { sender: true },
+        orderBy: { createdAt: 'asc' }
+      });
+
+      const transcript = messages.map(m => `${m.sender?.email || 'User'}: ${m.content}`).join('\n');
+      
+      const prompt = `Analyze the following meeting transcript and provide a JSON response with the following keys: "summary" (a short paragraph), "keyPoints" (array of strings), "actionItems" (array of strings), and "sentiment" (a string).\n\nTranscript:\n${transcript || 'No messages were sent in this meeting.'}`;
+      
+      const result = await this.model.generateContent(prompt);
+      const text = result.response.text();
+      // Try to parse JSON from the text, handling possible markdown blocks
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        return JSON.parse(jsonMatch[0]);
+      }
+      return { summary: "Could not parse JSON", raw: text };
+    } catch (error) {
+      console.error("Gemini Summary Error:", error);
+      return { error: "Failed to generate summary" };
     }
   }
 }

@@ -11,6 +11,8 @@ import ControlBar from '../components/meeting/ControlBar';
 import Sidebar from '../components/meeting/Sidebar';
 import { BACKEND_URL } from '../config';
 import '../components/meeting/Meeting.css';
+import { RecordingManager } from '../utils/RecordingManager';
+import { exportCaptions } from '../utils/CaptionExporter';
 
 const LANGUAGES = [
   { code: 'en-US', name: 'English' },
@@ -26,7 +28,7 @@ const LANGUAGES = [
 const MeetingRoom = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [activeTab, setActiveTab] = useState('chat');
   const [backendStatus, setBackendStatus] = useState('Connecting...');
@@ -36,10 +38,13 @@ const MeetingRoom = () => {
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [participants, setParticipants] = useState([]);
   const [chatMessages, setChatMessages] = useState([]);
+  const [isRecording, setIsRecording] = useState(false);
+  const recordingManagerRef = useRef(null);
+  const captionsLogRef = useRef([]);
   
   // Translation & Subtitles State
   const [subtitle, setSubtitle] = useState(null);
-  const [sourceLang, setSourceLang] = useState('en-US');
+  const [sourceLang, setSourceLang] = useState(user?.settings?.speechLanguage || 'en-US');
   const sourceLangRef = useRef(sourceLang);
   
   useEffect(() => { sourceLangRef.current = sourceLang; }, [sourceLang]);
@@ -47,9 +52,15 @@ const MeetingRoom = () => {
   useEffect(() => {
     if (socketRef.current) {
       const langName = LANGUAGES.find(l => l.code === sourceLang)?.name || 'English';
-      socketRef.current.emit('set-language', { lang: langName });
+      const settings = user?.settings || {};
+      socketRef.current.emit('set-language', { 
+        ...settings, 
+        lang: langName, 
+        captionLanguage: LANGUAGES.find(l => l.code === (settings.captionLanguage || 'en-US'))?.name || 'English',
+        translationLanguage: LANGUAGES.find(l => l.code === (settings.translationLanguage || 'en-US'))?.name || 'English'
+      });
     }
-  }, [sourceLang]);
+  }, [sourceLang, user]);
 
   const recognitionRef = useRef(null);
   
@@ -70,7 +81,13 @@ const MeetingRoom = () => {
       
       // Ensure backend knows our language immediately upon connection
       const langName = LANGUAGES.find(l => l.code === sourceLangRef.current)?.name || 'English';
-      socketRef.current.emit('set-language', { lang: langName });
+      const settings = user?.settings || {};
+      socketRef.current.emit('set-language', { 
+        ...settings, 
+        lang: langName, 
+        captionLanguage: LANGUAGES.find(l => l.code === (settings.captionLanguage || 'en-US'))?.name || 'English',
+        translationLanguage: LANGUAGES.find(l => l.code === (settings.translationLanguage || 'en-US'))?.name || 'English'
+      });
       
       // Request Camera and Mic permissions
       navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then((stream) => {
@@ -123,6 +140,12 @@ const MeetingRoom = () => {
             text: data.translatedText,
             original: data.originalText,
             senderId: data.senderId
+          });
+          
+          captionsLogRef.current.push({
+            timestamp: new Date().toISOString(),
+            sender: data.senderId === socketRef.current.id ? 'You' : 'Remote User',
+            text: data.translatedText
           });
           
           // Clear subtitle after 4 seconds
@@ -397,6 +420,28 @@ const MeetingRoom = () => {
     navigate(`/summary/${id}`);
   };
 
+  const handleStartRecording = async () => {
+    if (!recordingManagerRef.current) {
+      recordingManagerRef.current = new RecordingManager(id, token);
+    }
+    // For prototype: we record the local stream. If user shared screen, streamRef has screen.
+    if (streamRef.current) {
+      await recordingManagerRef.current.startRecording(streamRef.current);
+      setIsRecording(true);
+    }
+  };
+
+  const handleStopRecording = () => {
+    if (recordingManagerRef.current) {
+      recordingManagerRef.current.stopRecording();
+      setIsRecording(false);
+    }
+  };
+
+  const handleExportCaptions = (format) => {
+    exportCaptions(captionsLogRef.current, format, sourceLang);
+  };
+
   return (
     <div className="meeting-container">
       <div style={{ position: 'absolute', top: 20, left: 20, zIndex: 100, background: 'rgba(0,0,0,0.5)', padding: '8px 12px', borderRadius: '12px', color: backendStatus === 'Connected to Backend' ? '#00FFA3' : '#FF4444', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -450,22 +495,39 @@ const MeetingRoom = () => {
               bottom: '100px',
               left: '50%',
               transform: 'translateX(-50%)',
-              background: 'rgba(0, 0, 0, 0.7)',
-              backdropFilter: 'blur(10px)',
+              background: user?.settings?.captionTheme === 'light' ? `rgba(255, 255, 255, ${user?.settings?.captionOpacity ?? 0.8})` : 
+                          user?.settings?.captionTheme === 'transparent' ? 'transparent' : 
+                          `rgba(0, 0, 0, ${user?.settings?.captionOpacity ?? 0.7})`,
+              backdropFilter: user?.settings?.captionTheme === 'transparent' ? 'none' : 'blur(10px)',
               padding: '12px 24px',
               borderRadius: '20px',
-              color: '#FFF',
+              color: user?.settings?.captionTheme === 'light' ? '#000' : '#FFF',
               textAlign: 'center',
               zIndex: 50,
               maxWidth: '80%',
-              border: '1px solid rgba(255,255,255,0.1)',
-              boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
+              border: user?.settings?.captionTheme === 'transparent' ? 'none' : '1px solid rgba(255,255,255,0.1)',
+              boxShadow: user?.settings?.captionTheme === 'transparent' ? 'none' : '0 8px 32px rgba(0,0,0,0.3)',
               animation: 'fadeInUp 0.3s ease-out'
             }}>
-              <div style={{ fontSize: '1.2rem', fontWeight: '500', letterSpacing: '0.5px' }}>
+              <div style={{ 
+                fontSize: user?.settings?.captionFontSize === 'small' ? '0.9rem' : 
+                          user?.settings?.captionFontSize === 'large' ? '1.5rem' : 
+                          user?.settings?.captionFontSize === 'xlarge' ? '2rem' : '1.2rem', 
+                fontWeight: '500', 
+                letterSpacing: '0.5px',
+                textShadow: user?.settings?.captionTheme === 'transparent' ? '0px 2px 4px rgba(0,0,0,0.8)' : 'none'
+              }}>
                 {subtitle.text}
               </div>
-              <div style={{ fontSize: '0.85rem', color: '#A0A0A0', marginTop: '4px' }}>
+              <div style={{ 
+                fontSize: user?.settings?.captionFontSize === 'small' ? '0.7rem' : 
+                          user?.settings?.captionFontSize === 'large' ? '1.1rem' : 
+                          user?.settings?.captionFontSize === 'xlarge' ? '1.4rem' : '0.85rem', 
+                color: user?.settings?.captionTheme === 'light' ? '#444' : 
+                       user?.settings?.captionTheme === 'transparent' ? '#E0E0E0' : '#A0A0A0', 
+                marginTop: '4px',
+                textShadow: user?.settings?.captionTheme === 'transparent' ? '0px 1px 3px rgba(0,0,0,0.8)' : 'none'
+              }}>
                 {subtitle.original}
               </div>
             </div>
@@ -478,6 +540,10 @@ const MeetingRoom = () => {
             toggleSidebar={toggleSidebar}
             activeTab={isSidebarOpen ? activeTab : null}
             onLeave={handleLeave}
+            isRecording={isRecording}
+            onStartRecording={handleStartRecording}
+            onStopRecording={handleStopRecording}
+            onExportCaptions={handleExportCaptions}
           />
         </div>
 

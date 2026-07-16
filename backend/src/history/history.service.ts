@@ -11,7 +11,8 @@ export class HistoryService {
       include: {
         meeting: {
           include: {
-            host: { select: { email: true, profile: true } }
+            host: { select: { email: true, profile: true } },
+            recordings: true
           }
         }
       },

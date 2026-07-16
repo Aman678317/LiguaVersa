@@ -21,4 +21,9 @@ export class MeetingController {
   async inviteUser(@Body() data: { meetingCode: string; receiverId: string }) {
     return this.meetingService.inviteUser(data.meetingCode, data.receiverId);
   }
+
+  @Get('summary/:code')
+  async getSummary(@Param('code') code: string) {
+    return this.meetingService.getMeetingSummary(code);
+  }
 }

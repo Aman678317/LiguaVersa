@@ -10,7 +10,7 @@ export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect 
   server: Server;
 
   private connectedUsers = new Map<string, string>(); // userId -> socketId
-  private socketLanguages = new Map<string, string>(); // socketId -> language name
+  private socketSettings = new Map<string, any>(); // socketId -> settings object
 
   handleConnection(client: Socket) {
     const userId = client.handshake.query.userId as string;
@@ -27,7 +27,7 @@ export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect 
       this.connectedUsers.delete(userId);
       this.server.emit('user-offline', { userId });
     }
-    this.socketLanguages.delete(client.id);
+    this.socketSettings.delete(client.id);
   }
 
   @SubscribeMessage('get-online-users')
@@ -67,8 +67,8 @@ export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect 
   }
 
   @SubscribeMessage('set-language')
-  handleSetLanguage(@MessageBody() data: { lang: string }, @ConnectedSocket() client: Socket) {
-    this.socketLanguages.set(client.id, data.lang);
+  handleSetLanguage(@MessageBody() data: any, @ConnectedSocket() client: Socket) {
+    this.socketSettings.set(client.id, data);
   }
 
   @SubscribeMessage('chat-message')
@@ -78,7 +78,8 @@ export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect 
     for (const socket of sockets) {
       if (socket.id === client.id) continue;
       
-      const targetLang = this.socketLanguages.get(socket.id) || 'English';
+      const userSettings = this.socketSettings.get(socket.id) || {};
+      const targetLang = userSettings.translationLanguage || userSettings.lang || 'English';
       let translatedMsg = data.message;
       
       if (data.sourceLang !== targetLang) {
@@ -101,7 +102,8 @@ export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect 
     for (const socket of sockets) {
       if (socket.id === client.id) continue;
       
-      const targetLang = this.socketLanguages.get(socket.id) || 'English';
+      const userSettings = this.socketSettings.get(socket.id) || {};
+      const targetLang = userSettings.captionLanguage || userSettings.lang || 'English';
       let translatedText = data.text;
       
       if (data.sourceLang !== targetLang) {

@@ -20,6 +20,13 @@ export class UserController {
     return { success: true, profile };
   }
 
+  @UseGuards(JwtAuthGuard)
+  @Put('settings')
+  async updateSettings(@Request() req, @Body() body: any) {
+    const settings = await this.userService.updateSettings(req.user.id, body);
+    return { success: true, settings };
+  }
+
   @Get('search')
   async searchUsers(@Query('q') query: string) {
     const results = await this.userService.searchUsers(query);

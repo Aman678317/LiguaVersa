@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { PhoneIncoming, PhoneOutgoing, Clock, Sparkles, PhoneMissed } from 'lucide-react';
+import { PhoneIncoming, PhoneOutgoing, Clock, Sparkles, PhoneMissed, Search } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { BACKEND_URL } from '../config';
 import { useAuth } from '../context/AuthContext';
@@ -10,6 +10,7 @@ const HistoryTab = () => {
   const navigate = useNavigate();
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     fetchHistory();
@@ -42,23 +43,61 @@ const HistoryTab = () => {
     return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
+  const filteredHistory = history.filter(item => {
+    const q = searchQuery.toLowerCase();
+    const titleMatch = (item.meeting?.title || '').toLowerCase().includes(q);
+    
+    // Check if recording summaries have matching keywords
+    const recordings = item.meeting?.recordings || [];
+    const summaryMatch = recordings.some(r => {
+      const s = r.summaryJson || {};
+      return (
+        (s.summary || '').toLowerCase().includes(q) ||
+        (s.actionItems || []).some(a => a.toLowerCase().includes(q)) ||
+        (s.keyPoints || []).some(k => k.toLowerCase().includes(q))
+      );
+    });
+
+    return titleMatch || summaryMatch;
+  });
+
   return (
     <div className="history-tab">
       <div className="history-header">
         <h2>Call History</h2>
         <p>Review your past meetings and AI summaries.</p>
+        
+        <div style={{ marginTop: '20px', position: 'relative', maxWidth: '400px' }}>
+          <Search style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} size={20} />
+          <input 
+            type="text" 
+            placeholder="Search meetings, action items, keywords..." 
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            style={{ 
+              width: '100%', 
+              padding: '12px 16px 12px 48px', 
+              borderRadius: '20px', 
+              border: '1px solid var(--glass-border)', 
+              background: 'var(--glass-bg)',
+              color: '#fff',
+              fontSize: '1rem',
+              outline: 'none'
+            }}
+          />
+        </div>
       </div>
 
       <div className="history-list">
         {loading ? (
           <div className="empty-history">Loading history...</div>
-        ) : history.length === 0 ? (
+        ) : filteredHistory.length === 0 ? (
           <div className="empty-history">
             <Clock size={48} />
-            <p>You have no call history yet.</p>
+            <p>No results found for "{searchQuery}".</p>
           </div>
         ) : (
-          history.map(item => (
+          filteredHistory.map(item => (
             <div className="history-card" key={item.id}>
               <div className="history-info">
                 <div className={`history-icon ${item.type.toLowerCase()}`}>

@@ -68,4 +68,19 @@ export class MeetingService {
 
     return { success: true, message: 'Invitation sent.' };
   }
+
+  async getMeetingSummary(code: string) {
+    const meeting = await this.prisma.meeting.findUnique({
+      where: { meetingCode: code },
+      include: {
+        host: { select: { email: true, profile: true } },
+        participants: { include: { user: { select: { email: true, profile: true } } } },
+        recordings: true
+      }
+    });
+
+    if (!meeting) throw new NotFoundException('Meeting not found.');
+
+    return { success: true, meeting };
+  }
 }

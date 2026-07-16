@@ -12,6 +12,16 @@ const SettingsTab = () => {
     lastName: '',
     timezone: 'UTC'
   });
+  const [settingsData, setSettingsData] = useState({
+    nativeLanguage: 'en-US',
+    speechLanguage: 'en-US',
+    captionLanguage: 'en-US',
+    translationLanguage: 'en-US',
+    captionFontSize: 'medium',
+    captionTheme: 'dark',
+    captionOpacity: 0.7,
+    pinCaptions: false
+  });
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
 
@@ -23,10 +33,27 @@ const SettingsTab = () => {
         timezone: user.profile.timezone || 'UTC'
       });
     }
+    if (user && user.settings) {
+      setSettingsData({
+        nativeLanguage: user.settings.nativeLanguage || 'en-US',
+        speechLanguage: user.settings.speechLanguage || 'en-US',
+        captionLanguage: user.settings.captionLanguage || 'en-US',
+        translationLanguage: user.settings.translationLanguage || 'en-US',
+        captionFontSize: user.settings.captionFontSize || 'medium',
+        captionTheme: user.settings.captionTheme || 'dark',
+        captionOpacity: user.settings.captionOpacity ?? 0.7,
+        pinCaptions: user.settings.pinCaptions || false
+      });
+    }
   }, [user]);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+  
+  const handleSettingsChange = (e) => {
+    const value = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
+    setSettingsData({ ...settingsData, [e.target.name]: value });
   };
 
   const handleSave = async () => {
@@ -42,10 +69,21 @@ const SettingsTab = () => {
         body: JSON.stringify(formData)
       });
       const data = await res.json();
-      if (data.success) {
-        setMessage('Profile updated successfully! (Refresh to see changes globally)');
+      
+      const resSettings = await fetch(`${BACKEND_URL}/users/settings`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(settingsData)
+      });
+      const settingsResult = await resSettings.json();
+
+      if (data.success && settingsResult.success) {
+        setMessage('Preferences updated successfully! (Refresh to see changes globally)');
       } else {
-        setMessage('Failed to update profile.');
+        setMessage('Failed to update preferences.');
       }
     } catch (e) {
       console.error(e);
@@ -99,6 +137,83 @@ const SettingsTab = () => {
               <option value="IST">IST (Indian Standard Time)</option>
               <option value="JST">JST (Japan Standard Time)</option>
             </select>
+          </div>
+        </div>
+        
+        <div className="settings-section">
+          <h3><Globe size={20} /> Live Captions & Translation</h3>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+            <div className="form-group">
+              <label>My Speech Language</label>
+              <select name="speechLanguage" value={settingsData.speechLanguage} onChange={handleSettingsChange}>
+                <option value="en-US">English</option>
+                <option value="es-ES">Spanish</option>
+                <option value="fr-FR">French</option>
+                <option value="de-DE">German</option>
+                <option value="zh-CN">Chinese</option>
+                <option value="ja-JP">Japanese</option>
+                <option value="hi-IN">Hindi</option>
+                <option value="mr-IN">Marathi</option>
+                <option value="gu-IN">Gujarati</option>
+                <option value="pa-IN">Punjabi</option>
+                <option value="ta-IN">Tamil</option>
+                <option value="te-IN">Telugu</option>
+                <option value="ml-IN">Malayalam</option>
+                <option value="kn-IN">Kannada</option>
+                <option value="bn-IN">Bengali</option>
+                <option value="ur-PK">Urdu</option>
+                <option value="ru-RU">Russian</option>
+                <option value="ar-SA">Arabic</option>
+                <option value="tr-TR">Turkish</option>
+                <option value="pt-BR">Portuguese</option>
+                <option value="ko-KR">Korean</option>
+                <option value="it-IT">Italian</option>
+              </select>
+            </div>
+            <div className="form-group">
+              <label>Preferred Caption Language</label>
+              <select name="captionLanguage" value={settingsData.captionLanguage} onChange={handleSettingsChange}>
+                <option value="en-US">English</option>
+                <option value="es-ES">Spanish</option>
+                <option value="fr-FR">French</option>
+                <option value="de-DE">German</option>
+                <option value="zh-CN">Chinese</option>
+                <option value="ja-JP">Japanese</option>
+                <option value="hi-IN">Hindi</option>
+                <option value="mr-IN">Marathi</option>
+                <option value="gu-IN">Gujarati</option>
+                <option value="pa-IN">Punjabi</option>
+                <option value="ta-IN">Tamil</option>
+                <option value="te-IN">Telugu</option>
+                <option value="ml-IN">Malayalam</option>
+                <option value="kn-IN">Kannada</option>
+                <option value="bn-IN">Bengali</option>
+                <option value="ur-PK">Urdu</option>
+                <option value="ru-RU">Russian</option>
+                <option value="ar-SA">Arabic</option>
+                <option value="tr-TR">Turkish</option>
+                <option value="pt-BR">Portuguese</option>
+                <option value="ko-KR">Korean</option>
+                <option value="it-IT">Italian</option>
+              </select>
+            </div>
+            <div className="form-group">
+              <label>Caption Font Size</label>
+              <select name="captionFontSize" value={settingsData.captionFontSize} onChange={handleSettingsChange}>
+                <option value="small">Small</option>
+                <option value="medium">Medium</option>
+                <option value="large">Large</option>
+                <option value="xlarge">Extra Large</option>
+              </select>
+            </div>
+            <div className="form-group">
+              <label>Caption Theme</label>
+              <select name="captionTheme" value={settingsData.captionTheme} onChange={handleSettingsChange}>
+                <option value="dark">Dark Mode</option>
+                <option value="light">Light Mode</option>
+                <option value="transparent">Transparent</option>
+              </select>
+            </div>
           </div>
         </div>
 

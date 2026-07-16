@@ -12,7 +12,7 @@ export class UserService {
   async getUserById(id: string) {
     return this.prisma.user.findUnique({
       where: { id },
-      include: { profile: true }
+      include: { profile: true, settings: true }
     });
   }
 
@@ -32,6 +32,15 @@ export class UserService {
           ...data
         }
       });
+    }
+  }
+
+  async updateSettings(userId: string, data: any) {
+    const existing = await this.prisma.setting.findUnique({ where: { userId } });
+    if (existing) {
+      return this.prisma.setting.update({ where: { userId }, data });
+    } else {
+      return this.prisma.setting.create({ data: { userId, ...data } });
     }
   }
 
