@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import VideoTile from './VideoTile';
 
-const VideoGrid = ({ participants }) => {
+const VideoGrid = ({ participants, translationEnabled }) => {
   // Calculate grid layout based on number of participants
   const gridStyle = useMemo(() => {
     const count = participants.length;
@@ -25,7 +25,7 @@ const VideoGrid = ({ participants }) => {
     <div className="video-grid-container">
       <div className="video-grid" style={gridStyle}>
         {participants.map((p) => (
-          <VideoTile key={p.id} participant={p} />
+          <VideoTile key={p.id} participant={p} translationEnabled={translationEnabled} />
         ))}
       </div>
     </div>

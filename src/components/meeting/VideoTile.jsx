@@ -2,7 +2,7 @@ import React, { useRef, useEffect } from 'react';
 import { MicOff, User } from 'lucide-react';
 import { motion } from 'framer-motion';
 
-const VideoTile = ({ participant }) => {
+const VideoTile = ({ participant, translationEnabled }) => {
   const videoRef = useRef(null);
 
   useEffect(() => {
@@ -30,7 +30,7 @@ const VideoTile = ({ participant }) => {
           className="video-stream"
           autoPlay 
           playsInline 
-          muted={participant.isLocal}
+          muted={participant.isLocal || translationEnabled}
         />
       )}
 

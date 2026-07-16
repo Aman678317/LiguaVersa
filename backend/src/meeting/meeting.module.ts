@@ -4,12 +4,13 @@ import { MeetingController } from './meeting.controller';
 import { MeetingService } from './meeting.service';
 import { PrismaModule } from '../prisma/prisma.module';
 import { TranslationService } from './translation.service';
-
+import { SpeechService } from './speech.service';
+import { TtsService } from './tts.service';
 import { RecordingController } from './recording.controller';
 
 @Module({
   imports: [PrismaModule],
   controllers: [MeetingController, RecordingController],
-  providers: [MeetingGateway, MeetingService, TranslationService],
+  providers: [MeetingGateway, MeetingService, TranslationService, SpeechService, TtsService],
 })
 export class MeetingModule {}

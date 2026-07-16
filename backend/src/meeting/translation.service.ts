@@ -1,42 +1,51 @@
 import { Injectable } from '@nestjs/common';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import OpenAI from 'openai';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class TranslationService {
-  private ai: GoogleGenerativeAI;
-  private model: any;
+  private openai: OpenAI | null = null;
+  private readonly defaultModel = 'openai/gpt-4o-mini';
 
   constructor(private prisma: PrismaService) {
-    const apiKey = process.env.GEMINI_API_KEY || '';
+    const apiKey = process.env.OPENROUTER_API_KEY || '';
     if (apiKey) {
-      this.ai = new GoogleGenerativeAI(apiKey);
-      this.model = this.ai.getGenerativeModel({ model: 'gemini-3.5-flash' });
+      this.openai = new OpenAI({
+        baseURL: 'https://openrouter.ai/api/v1',
+        apiKey: apiKey,
+      });
+    } else {
+      console.warn("OPENROUTER_API_KEY is missing. Using fallback mock translation.");
     }
   }
 
   async translateText(text: string, sourceLang: string, targetLang: string): Promise<string> {
-    if (!this.model) {
-      console.warn("GEMINI_API_KEY is missing. Using fallback mock translation.");
+    if (!this.openai) {
       return `[${targetLang.toUpperCase()}] ${text}`;
     }
 
     try {
-      const prompt = `Translate the following text from ${sourceLang} to ${targetLang}. Only output the translated text and nothing else, without quotes.\n\nText: ${text}`;
-      const result = await this.model.generateContent(prompt);
-      return result.response.text().trim();
+      const response = await this.openai.chat.completions.create({
+        model: this.defaultModel,
+        messages: [
+          { role: 'system', content: `You are a real-time voice translator. Translate the following spoken text from ${sourceLang} to ${targetLang}. Preserve the original meaning, tone, emotion, and context perfectly. Respond ONLY with the translated text, no quotes or explanations.` },
+          { role: 'user', content: text }
+        ],
+        temperature: 0.3,
+      });
+      return response.choices[0]?.message?.content?.trim() || text;
     } catch (error) {
-      console.error("Gemini Translation Error:", error);
-      return `[Error: Translation Failed] ${text}`;
+      console.error("OpenRouter Translation Error:", error);
+      return `[Error] ${text}`;
     }
   }
 
   async generateMeetingSummary(meetingId: string): Promise<any> {
-    if (!this.model) {
+    if (!this.openai) {
       return {
-        summary: "Mock summary since Gemini is not configured.",
-        keyPoints: ["Discussed project updates", "Planned next steps"],
-        actionItems: ["Deploy to production", "Fix UI bugs"],
+        summary: "Mock summary since OpenRouter is not configured.",
+        keyPoints: ["Discussed project updates"],
+        actionItems: ["Deploy to production"],
         sentiment: "Neutral"
       };
     }
@@ -56,19 +65,20 @@ export class TranslationService {
       
       const transcript = messages.map(m => `${userMap.get(m.senderId) || 'User'}: ${m.content}`).join('\n');
       
-      const prompt = `Analyze the following meeting transcript and provide a JSON response with the following keys: "summary" (a short paragraph), "keyPoints" (array of strings), "actionItems" (array of strings), and "sentiment" (a string).\n\nTranscript:\n${transcript || 'No messages were sent in this meeting.'}`;
+      const prompt = `Analyze the following meeting transcript and provide a JSON response with exactly these keys: "summary" (a short paragraph), "keyPoints" (array of strings), "actionItems" (array of strings), and "sentiment" (a string).\n\nTranscript:\n${transcript || 'No messages were sent in this meeting.'}`;
       
-      const result = await this.model.generateContent(prompt);
-      const text = result.response.text();
-      // Try to parse JSON from the text, handling possible markdown blocks
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        return JSON.parse(jsonMatch[0]);
-      }
-      return { summary: "Could not parse JSON", raw: text };
+      const response = await this.openai.chat.completions.create({
+        model: this.defaultModel,
+        messages: [{ role: 'user', content: prompt }],
+        response_format: { type: 'json_object' }
+      });
+
+      const text = response.choices[0]?.message?.content || '{}';
+      return JSON.parse(text);
     } catch (error) {
-      console.error("Gemini Summary Error:", error);
+      console.error("OpenRouter Summary Error:", error);
       return { error: "Failed to generate summary" };
     }
   }
 }
+

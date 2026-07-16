@@ -14,6 +14,10 @@ import '../components/meeting/Meeting.css';
 import { RecordingManager } from '../utils/RecordingManager';
 import { exportCaptions } from '../utils/CaptionExporter';
 
+import { useRealTimeTranslation } from '../hooks/useRealTimeTranslation';
+import { TranslationPanel } from '../components/translation/TranslationPanel';
+import { LiveCaptions } from '../components/translation/LiveCaptions';
+
 const LANGUAGES = [
   { code: 'en-US', name: 'English' },
   { code: 'es-ES', name: 'Spanish' },
@@ -43,32 +47,46 @@ const MeetingRoom = () => {
   const captionsLogRef = useRef([]);
   
   // Translation & Subtitles State
-  const [subtitle, setSubtitle] = useState(null);
-  const [sourceLang, setSourceLang] = useState(user?.settings?.speechLanguage || 'en-US');
-  const sourceLangRef = useRef(sourceLang);
+  const [sourceLang, setSourceLang] = useState(user?.settings?.speechLanguage || 'English');
+  const [translationEnabled, setTranslationEnabled] = useState(false);
+  const [targetVoice, setTargetVoice] = useState('alloy');
   
+  const sourceLangRef = useRef(sourceLang);
   useEffect(() => { sourceLangRef.current = sourceLang; }, [sourceLang]);
 
   useEffect(() => {
     if (socketRef.current) {
-      const langName = LANGUAGES.find(l => l.code === sourceLang)?.name || 'English';
       const settings = user?.settings || {};
       socketRef.current.emit('set-language', { 
         ...settings, 
-        lang: langName, 
-        captionLanguage: LANGUAGES.find(l => l.code === (settings.captionLanguage || 'en-US'))?.name || 'English',
-        translationLanguage: LANGUAGES.find(l => l.code === (settings.translationLanguage || 'en-US'))?.name || 'English'
+        lang: sourceLang, 
+        translationLanguage: sourceLang,
+        translationEnabled,
+        translationVoice: targetVoice
       });
     }
-  }, [sourceLang, user]);
+  }, [sourceLang, translationEnabled, targetVoice, user]);
 
-  const recognitionRef = useRef(null);
-  
   const socketRef = useRef();
   const peersRef = useRef([]); // Stores peer instances
   const streamRef = useRef();
   const screenStreamRef = useRef(null);
   const startTime = useRef(Date.now());
+
+  // Real-Time Voice Translation Hook
+  const { 
+    captions, 
+    latency, 
+    isTranslating, 
+    startRecording, 
+    stopRecording 
+  } = useRealTimeTranslation(
+    socketRef.current, 
+    id, 
+    socketRef.current?.id || user?.id || 'local', 
+    sourceLang, 
+    translationEnabled
+  );
 
   useEffect(() => {
     socketRef.current = io(BACKEND_URL, {
@@ -133,60 +151,6 @@ const MeetingRoom = () => {
         socketRef.current.on('chat-message', (data) => {
           setChatMessages(prev => [...prev, data]);
         });
-
-        // Handle incoming translated speech
-        socketRef.current.on('translated-speech', (data) => {
-          setSubtitle({
-            text: data.translatedText,
-            original: data.originalText,
-            senderId: data.senderId
-          });
-          
-          captionsLogRef.current.push({
-            timestamp: new Date().toISOString(),
-            sender: data.senderId === socketRef.current.id ? 'You' : 'Remote User',
-            text: data.translatedText
-          });
-          
-          // Clear subtitle after 4 seconds
-          setTimeout(() => {
-            setSubtitle(null);
-          }, 4000);
-        });
-
-        // Initialize Speech Recognition
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if (SpeechRecognition) {
-          recognitionRef.current = new SpeechRecognition();
-          recognitionRef.current.continuous = true;
-          recognitionRef.current.interimResults = false;
-          recognitionRef.current.lang = sourceLangRef.current;
-          
-          recognitionRef.current.onresult = (event) => {
-            const transcript = event.results[event.results.length - 1][0].transcript;
-            
-            const sourceName = LANGUAGES.find(l => l.code === sourceLangRef.current)?.name || 'English';
-
-            // Send to backend for translation
-            socketRef.current.emit('speech-transcription', {
-              text: transcript,
-              senderId: socketRef.current.id,
-              roomId: id,
-              sourceLang: sourceName
-            });
-          };
-
-          // Automatically restart recognition if it stops (common browser behavior)
-          recognitionRef.current.onend = () => {
-            if (!isMuted && recognitionRef.current) {
-              try { recognitionRef.current.start(); } catch (e) {}
-            }
-          };
-          
-          // Start recognition if mic is not muted
-          recognitionRef.current.start();
-        }
-
       }).catch(err => {
         console.error("Failed to get media devices:", err);
         setBackendStatus('Camera/Mic Blocked');
@@ -204,9 +168,7 @@ const MeetingRoom = () => {
       if (screenStreamRef.current) {
         screenStreamRef.current.getTracks().forEach(track => track.stop());
       }
-      if (recognitionRef.current) {
-        recognitionRef.current.stop();
-      }
+      stopRecording();
       socketRef.current.disconnect();
     };
   }, [id]);
@@ -371,15 +333,12 @@ const MeetingRoom = () => {
     }
     setParticipants(prev => prev.map(p => p.isLocal ? { ...p, muted: isMuted } : p));
     
-    // Manage speech recognition when muted or language changes
-    if (recognitionRef.current) {
-      recognitionRef.current.lang = sourceLang;
-      try { recognitionRef.current.stop(); } catch (e) {}
-      if (!isMuted) {
-        setTimeout(() => { try { recognitionRef.current.start(); } catch (e) {} }, 100);
-      }
+    if (!isMuted && translationEnabled && streamRef.current) {
+      startRecording(streamRef.current);
+    } else {
+      stopRecording();
     }
-  }, [isMuted, sourceLang]);
+  }, [isMuted, translationEnabled, sourceLang, startRecording, stopRecording]);
 
   // Toggle Video
   useEffect(() => {
@@ -444,6 +403,17 @@ const MeetingRoom = () => {
 
   return (
     <div className="meeting-container">
+      <TranslationPanel 
+        isEnabled={translationEnabled}
+        onToggle={() => setTranslationEnabled(!translationEnabled)}
+        targetLang={sourceLang}
+        onLangChange={setSourceLang}
+        targetVoice={targetVoice}
+        onVoiceChange={setTargetVoice}
+        latency={latency}
+        isTranslating={isTranslating}
+      />
+      
       <div style={{ position: 'absolute', top: 20, left: 20, zIndex: 100, background: 'rgba(0,0,0,0.5)', padding: '8px 12px', borderRadius: '12px', color: backendStatus === 'Connected to Backend' ? '#00FFA3' : '#FF4444', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
         <div style={{ width: 8, height: 8, borderRadius: '50%', background: backendStatus === 'Connected to Backend' ? '#00FFA3' : '#FF4444' }}></div>
         {backendStatus}
@@ -486,52 +456,9 @@ const MeetingRoom = () => {
             </div>
           </div>
 
-          <VideoGrid participants={participants} />
+          <VideoGrid participants={participants} translationEnabled={translationEnabled} />
           
-          {/* Cinematic Subtitles Overlay */}
-          {subtitle && (
-            <div style={{
-              position: 'absolute',
-              bottom: '100px',
-              left: '50%',
-              transform: 'translateX(-50%)',
-              background: user?.settings?.captionTheme === 'light' ? `rgba(255, 255, 255, ${user?.settings?.captionOpacity ?? 0.8})` : 
-                          user?.settings?.captionTheme === 'transparent' ? 'transparent' : 
-                          `rgba(0, 0, 0, ${user?.settings?.captionOpacity ?? 0.7})`,
-              backdropFilter: user?.settings?.captionTheme === 'transparent' ? 'none' : 'blur(10px)',
-              padding: '12px 24px',
-              borderRadius: '20px',
-              color: user?.settings?.captionTheme === 'light' ? '#000' : '#FFF',
-              textAlign: 'center',
-              zIndex: 50,
-              maxWidth: '80%',
-              border: user?.settings?.captionTheme === 'transparent' ? 'none' : '1px solid rgba(255,255,255,0.1)',
-              boxShadow: user?.settings?.captionTheme === 'transparent' ? 'none' : '0 8px 32px rgba(0,0,0,0.3)',
-              animation: 'fadeInUp 0.3s ease-out'
-            }}>
-              <div style={{ 
-                fontSize: user?.settings?.captionFontSize === 'small' ? '0.9rem' : 
-                          user?.settings?.captionFontSize === 'large' ? '1.5rem' : 
-                          user?.settings?.captionFontSize === 'xlarge' ? '2rem' : '1.2rem', 
-                fontWeight: '500', 
-                letterSpacing: '0.5px',
-                textShadow: user?.settings?.captionTheme === 'transparent' ? '0px 2px 4px rgba(0,0,0,0.8)' : 'none'
-              }}>
-                {subtitle.text}
-              </div>
-              <div style={{ 
-                fontSize: user?.settings?.captionFontSize === 'small' ? '0.7rem' : 
-                          user?.settings?.captionFontSize === 'large' ? '1.1rem' : 
-                          user?.settings?.captionFontSize === 'xlarge' ? '1.4rem' : '0.85rem', 
-                color: user?.settings?.captionTheme === 'light' ? '#444' : 
-                       user?.settings?.captionTheme === 'transparent' ? '#E0E0E0' : '#A0A0A0', 
-                marginTop: '4px',
-                textShadow: user?.settings?.captionTheme === 'transparent' ? '0px 1px 3px rgba(0,0,0,0.8)' : 'none'
-              }}>
-                {subtitle.original}
-              </div>
-            </div>
-          )}
+          <LiveCaptions captions={captions} isEnabled={translationEnabled} />
           
           <ControlBar 
             isMuted={isMuted} setIsMuted={setIsMuted}
