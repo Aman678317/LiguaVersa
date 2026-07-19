@@ -325,15 +325,19 @@ model TranslationHistory {
 }
 
 model SpeechHistory {
-  id            String   @id @default(uuid())
-  participantId String
-  transcription String
-  confidence    Float
-  durationMs    Int
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id               String   @id @default(uuid())
+  participantId    String
+  meetingId        String?
+  transcription    String
+  translatedText   String?
+  targetLanguage   String?
+  confidence       Float
+  durationMs       Int
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   participant MeetingParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  meeting     Meeting?           @relation(fields: [meetingId], references: [id], onDelete: Cascade)
 }
 
 // ---------------------------------------------------------
@@ -408,6 +412,9 @@ model Setting {
   captionFontSize     String   @default("medium")
   captionTheme        String   @default("dark")
   captionOpacity      Float    @default(0.7)
+  captionColor        String   @default("#ffffff")
+  captionPosition     String   @default("bottom")
+  dualCaptionMode     Boolean  @default(true)
   pinCaptions         Boolean  @default(false)
 
   // Chat Translation Preferences

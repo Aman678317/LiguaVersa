@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { VAD } from '../utils/VAD';
+import { CaptionSynchronizer } from '../utils/CaptionSynchronizer';
 
 export const useRealTimeTranslation = (socket, roomId, userId, sourceLang, isEnabled) => {
   const [captions, setCaptions] = useState([]);
@@ -11,6 +12,7 @@ export const useRealTimeTranslation = (socket, roomId, userId, sourceLang, isEna
   const lastChunkTimeRef = useRef(0);
   const sequenceIdRef = useRef(0);
   const vadRef = useRef(null);
+  const synchronizerRef = useRef(null);
 
   // Initialize Audio Playback Queue
   useEffect(() => {
@@ -24,23 +26,35 @@ export const useRealTimeTranslation = (socket, roomId, userId, sourceLang, isEna
   useEffect(() => {
     if (!socket || !isEnabled) return;
 
-    const handleCaption = (data) => {
-      setCaptions(prev => [...prev.slice(-4), data]);
+    if (!synchronizerRef.current) {
+      synchronizerRef.current = new CaptionSynchronizer((payload) => {
+        setCaptions(prev => {
+          const newCaptions = [...prev, payload];
+          // Keep only the last 5 finalized captions
+          return newCaptions.slice(-5);
+        });
+        if (lastChunkTimeRef.current) {
+          setLatency(Date.now() - lastChunkTimeRef.current);
+        }
+      });
+    }
+
+    const handlePartial = (data) => {
+      // Partial updates only append or overwrite the *current* live speaking line.
+      // For simplicity, we just inject a special "partial" element at the end of the array.
+      setCaptions(prev => {
+        const filtered = prev.filter(c => !c.isPartial);
+        return [...filtered, { ...data, isPartial: true }];
+      });
     };
 
-    const handleText = (data) => {
-      setCaptions(prev => {
-        const last = prev[prev.length - 1];
-        if (last && last.originalText === data.originalText && last.senderId === data.senderId) {
-          const updated = [...prev];
-          updated[updated.length - 1] = { ...last, translatedText: data.translatedText };
-          return updated;
-        }
-        return [...prev.slice(-4), data];
-      });
-      // Calculate Latency
-      if (lastChunkTimeRef.current) {
-        setLatency(Date.now() - lastChunkTimeRef.current);
+    const handleFinal = (data) => {
+      // Queue it for sync
+      synchronizerRef.current.queueCaption(data.sequenceId, { ...data, isPartial: false });
+      
+      // If it's the sender's own speech (no TTS delay), display immediately
+      if (data.speakerId === userId) {
+        synchronizerRef.current.syncAndDisplay(data.sequenceId);
       }
     };
 
@@ -61,6 +75,16 @@ export const useRealTimeTranslation = (socket, roomId, userId, sourceLang, isEna
         }
 
         source.start(nextPlayTimeRef.current);
+        
+        // Trigger synchronized caption display when audio starts playing
+        // Timeout based on difference between now and nextPlayTime
+        const delayMs = Math.max(0, (nextPlayTimeRef.current - currentTime) * 1000);
+        setTimeout(() => {
+          if (synchronizerRef.current) {
+            synchronizerRef.current.syncAndDisplay(data.sequenceId);
+          }
+        }, delayMs);
+
         nextPlayTimeRef.current += audioBuffer.duration;
 
         // Note: Ducking of WebRTC audio happens in MeetingRoom.jsx via AudioMixer
@@ -71,13 +95,13 @@ export const useRealTimeTranslation = (socket, roomId, userId, sourceLang, isEna
       }
     };
 
-    socket.on('translation:caption', handleCaption);
-    socket.on('translation:text', handleText);
+    socket.on('caption:partial', handlePartial);
+    socket.on('caption:final', handleFinal);
     socket.on('translation:audio-out', handleAudioOut);
 
     return () => {
-      socket.off('translation:caption', handleCaption);
-      socket.off('translation:text', handleText);
+      socket.off('caption:partial', handlePartial);
+      socket.off('caption:final', handleFinal);
       socket.off('translation:audio-out', handleAudioOut);
     };
   }, [socket, isEnabled, userId]);

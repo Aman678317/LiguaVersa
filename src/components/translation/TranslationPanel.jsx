@@ -25,7 +25,8 @@ export const TranslationPanel = ({
   targetVoice, 
   onVoiceChange, 
   latency, 
-  isTranslating 
+  isTranslating,
+  onOpenCaptionSettings
 }) => {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -63,6 +64,19 @@ export const TranslationPanel = ({
                 <option key={v} value={v}>{v.charAt(0).toUpperCase() + v.slice(1)}</option>
               ))}
             </select>
+          </div>
+
+          <div className="setting-group">
+            <button 
+              onClick={onOpenCaptionSettings}
+              style={{
+                width: '100%', padding: '8px', background: 'rgba(0,255,163,0.1)', 
+                border: '1px solid #00FFA3', color: '#00FFA3', borderRadius: '4px',
+                cursor: 'pointer', marginTop: '8px'
+              }}
+            >
+              Subtitle Settings ⚙️
+            </button>
           </div>
 
           <div className="status-board">

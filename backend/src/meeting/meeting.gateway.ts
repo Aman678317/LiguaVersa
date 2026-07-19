@@ -4,6 +4,7 @@ import { TranslationService } from './translation.service';
 import { SpeechService } from './speech.service';
 import { TtsService } from './tts.service';
 import { ChatService } from '../chat/chat.service';
+import { CaptionService } from './caption.service';
 
 @WebSocketGateway({ cors: { origin: '*' }, maxHttpBufferSize: 1e8 })
 export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect {
@@ -12,6 +13,7 @@ export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect 
     private speechService: SpeechService,
     private ttsService: TtsService,
     private chatService: ChatService,
+    private captionService: CaptionService,
   ) {}
 
   @WebSocketServer()
@@ -198,17 +200,28 @@ export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect 
         const transcript = await this.speechService.transcribeAudio(fullBuffer, 'audio/webm');
         if (!transcript || transcript.trim().length === 0) return;
 
-        this.server.to(data.roomId).emit('translation:caption', {
+        // Broadcast partial caption for live feedback (simulated immediately for responsiveness)
+        this.server.to(data.roomId).emit('caption:partial', {
           speakerId: data.senderId,
           text: transcript,
-          type: 'original',
           timestamp: Date.now()
         });
 
         const sockets = await this.server.in(data.roomId).fetchSockets();
         
         await Promise.all(sockets.map(async (socket) => {
-          if (socket.id === client.id) return; 
+          if (socket.id === client.id) {
+            // Echo back to sender
+            this.server.to(socket.id).emit('caption:final', {
+              speakerId: data.senderId,
+              sequenceId: data.sequenceId,
+              originalText: transcript,
+              translatedText: transcript,
+              targetLang: data.sourceLang,
+              timestamp: Date.now()
+            });
+            return; 
+          }
           
           const userSettings = this.socketSettings.get(socket.id) || {};
           const isTranslationEnabled = userSettings.translationEnabled !== false;
@@ -224,12 +237,28 @@ export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect 
             translatedText = await this.translationService.translateText(transcript, data.sourceLang, targetLang);
           }
 
-          this.server.to(socket.id).emit('translation:text', {
-            senderId: data.senderId,
+          // Save caption history asynchronously
+          this.captionService.saveCaptionHistory(
+            data.senderUserId || 'unknown',
+            data.roomId,
+            transcript,
+            translatedText,
+            targetLang,
+            0.95,
+            800
+          );
+
+          // Emit final synchronized caption
+          this.server.to(socket.id).emit('caption:final', {
+            speakerId: data.senderId,
+            sequenceId: data.sequenceId,
             originalText: transcript,
             translatedText: translatedText,
+            targetLang: targetLang,
+            timestamp: Date.now()
           });
 
+          // Text to Speech
           const audioBuffer = await this.ttsService.generateSpeech(translatedText, targetVoice);
           
           this.server.to(socket.id).emit('translation:audio-out', {

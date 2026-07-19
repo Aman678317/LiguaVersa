@@ -18,6 +18,7 @@ import { AudioMixer } from '../utils/AudioMixer';
 import { useRealTimeTranslation } from '../hooks/useRealTimeTranslation';
 import { TranslationPanel } from '../components/translation/TranslationPanel';
 import { LiveCaptions } from '../components/translation/LiveCaptions';
+import { CaptionSettings } from '../components/translation/CaptionSettings';
 
 const LANGUAGES = [
   { code: 'en-US', name: 'English' },
@@ -52,6 +53,14 @@ const MeetingRoom = () => {
   const [sourceLang, setSourceLang] = useState(user?.settings?.speechLanguage || 'English');
   const [translationEnabled, setTranslationEnabled] = useState(false);
   const [targetVoice, setTargetVoice] = useState('alloy');
+  const [isCaptionSettingsOpen, setIsCaptionSettingsOpen] = useState(false);
+  const [captionSettings, setCaptionSettings] = useState({
+    fontSize: user?.settings?.captionFontSize || 'medium',
+    position: user?.settings?.captionPosition || 'bottom',
+    color: user?.settings?.captionColor || '#ffffff',
+    dualMode: user?.settings?.dualCaptionMode !== false,
+    opacity: user?.settings?.captionOpacity || 0.7
+  });
   
   const sourceLangRef = useRef(sourceLang);
   useEffect(() => { sourceLangRef.current = sourceLang; }, [sourceLang]);
@@ -434,6 +443,7 @@ const MeetingRoom = () => {
         onVoiceChange={setTargetVoice}
         latency={latency}
         isTranslating={isTranslating}
+        onOpenCaptionSettings={() => setIsCaptionSettingsOpen(true)}
       />
       
       <div style={{ position: 'absolute', top: 20, left: 20, zIndex: 100, background: 'rgba(0,0,0,0.5)', padding: '8px 12px', borderRadius: '12px', color: backendStatus === 'Connected to Backend' ? '#00FFA3' : '#FF4444', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -476,7 +486,14 @@ const MeetingRoom = () => {
           {/* WebRTC Video component handles audio context ducking globally */}
           <VideoGrid participants={participants} translationEnabled={translationEnabled} />
           
-          <LiveCaptions captions={captions} isEnabled={translationEnabled} />
+          <LiveCaptions captions={captions} isEnabled={translationEnabled} settings={captionSettings} />
+          
+          <CaptionSettings 
+            isOpen={isCaptionSettingsOpen} 
+            onClose={() => setIsCaptionSettingsOpen(false)} 
+            settings={captionSettings}
+            onSettingsChange={setCaptionSettings} 
+          />
           
           <ControlBar 
             isMuted={isMuted} setIsMuted={setIsMuted}
