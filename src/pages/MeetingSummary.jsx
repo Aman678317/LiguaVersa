@@ -125,16 +125,16 @@ const MeetingSummary = () => {
                       
                       <p style={{ color: '#3b82f6', fontWeight: '600', marginBottom: '10px' }}>Key Points:</p>
                       <ul style={{ marginBottom: '20px', paddingLeft: '20px' }}>
-                        {(summaryJson.keyPoints || []).map((item, idx) => (
+                        {Array.isArray(summaryJson.keyPoints) ? summaryJson.keyPoints.map((item, idx) => (
                           <li key={idx} style={{ marginBottom: '8px' }}>{item}</li>
-                        ))}
+                        )) : (summaryJson.keyPoints && <li style={{ marginBottom: '8px' }}>{String(summaryJson.keyPoints)}</li>)}
                       </ul>
 
                       <p style={{ color: '#f59e0b', fontWeight: '600', marginBottom: '10px' }}>Action Items:</p>
                       <ul style={{ paddingLeft: '20px' }}>
-                        {(summaryJson.actionItems || []).map((item, idx) => (
+                        {Array.isArray(summaryJson.actionItems) ? summaryJson.actionItems.map((item, idx) => (
                           <li key={idx} style={{ marginBottom: '8px' }}>{item}</li>
-                        ))}
+                        )) : (summaryJson.actionItems && <li style={{ marginBottom: '8px' }}>{String(summaryJson.actionItems)}</li>)}
                       </ul>
                     </>
                   ) : (
