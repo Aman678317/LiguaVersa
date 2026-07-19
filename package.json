@@ -10,6 +10,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@livekit/components-react": "^2.6.5",
+    "@livekit/components-styles": "^1.2.0",
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.6.1",
     "@react-three/postprocessing": "^3.0.4",
@@ -17,6 +19,7 @@
     "events": "^3.3.0",
     "framer-motion": "^12.42.2",
     "gsap": "^3.15.0",
+    "livekit-client": "^2.5.9",
     "lucide-react": "^1.23.0",
     "process": "^0.11.10",
     "react": "^19.2.7",
@@ -25,9 +28,7 @@
     "recharts": "^3.9.2",
     "simple-peer": "^9.11.1",
     "socket.io-client": "^4.8.3",
-    "three": "^0.185.1",
-    "livekit-client": "^2.5.9",
-    "@livekit/components-react": "^2.6.5"
+    "three": "^0.185.1"
   },
   "devDependencies": {
     "@types/react": "^19.2.17",
