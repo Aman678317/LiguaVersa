@@ -27,6 +27,9 @@ const Dashboard = () => {
   const [incomingCall, setIncomingCall] = useState(null);
   const [upcomingMeetings, setUpcomingMeetings] = useState([]);
   const [allMeetings, setAllMeetings] = useState([]);
+  const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
+  const [selectedMeeting, setSelectedMeeting] = useState(null);
+  const [meetingToEdit, setMeetingToEdit] = useState(null);
 
   const fetchMeetings = async () => {
     if (!token) return;
@@ -187,8 +190,13 @@ const Dashboard = () => {
   const handleScheduleMeeting = async (formData) => {
     setIsCreating(true);
     try {
-      const response = await fetch(`${BACKEND_URL}/meetings`, {
-        method: 'POST',
+      const url = meetingToEdit 
+        ? `${BACKEND_URL}/meetings/${meetingToEdit.id}`
+        : `${BACKEND_URL}/meetings`;
+      const method = meetingToEdit ? 'PUT' : 'POST';
+
+      const response = await fetch(url, {
+        method,
         headers: { 
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}` 
@@ -196,18 +204,50 @@ const Dashboard = () => {
         body: JSON.stringify(formData)
       });
       const data = await response.json();
-      if (data.success || data.meetingId) {
-        alert(`Meeting "${formData.title}" scheduled successfully!`);
+      if (data.success || data.meetingId || data.id) {
+        alert(`Meeting "${formData.title}" ${meetingToEdit ? 'updated' : 'scheduled'} successfully!`);
         fetchMeetings();
       } else {
-        alert('Failed to schedule meeting.');
+        alert(`Failed to ${meetingToEdit ? 'update' : 'schedule'} meeting.`);
       }
     } catch (err) {
       console.error(err);
-      alert('Error scheduling meeting.');
+      alert(`Error ${meetingToEdit ? 'updating' : 'scheduling'} meeting.`);
     } finally {
       setIsCreating(false);
+      setMeetingToEdit(null);
     }
+  };
+
+  const handleEditClick = (rawMeeting) => {
+    if (!rawMeeting) return;
+    
+    // Parse scheduledFor back into date and time strings
+    let date = '';
+    let startTime = '';
+    if (rawMeeting.scheduledFor) {
+      const d = new Date(rawMeeting.scheduledFor);
+      date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      startTime = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    }
+
+    setMeetingToEdit({
+      id: rawMeeting.id,
+      title: rawMeeting.title || '',
+      description: rawMeeting.description || '',
+      password: rawMeeting.password || '',
+      date,
+      startTime,
+      meetingLanguage: rawMeeting.translationSettings?.meetingLanguage || 'English',
+      translationLanguage: rawMeeting.translationSettings?.translationLanguage || 'Hindi',
+      liveTranslation: rawMeeting.settings?.liveTranslation ?? true,
+      liveCaptions: rawMeeting.settings?.liveCaptions ?? true,
+      aiSummary: rawMeeting.settings?.aiSummary ?? true,
+      recording: rawMeeting.settings?.recording ?? false,
+      waitingRoom: rawMeeting.waitingRoom ?? false,
+    });
+    setSelectedMeeting(null);
+    setIsScheduleModalOpen(true);
   };
 
   return (
@@ -298,7 +338,10 @@ const Dashboard = () => {
             <motion.div 
               className="action-card schedule glass-card" 
               whileHover={{ scale: 1.02 }}
-              onClick={() => setIsScheduleModalOpen(true)}
+              onClick={() => {
+                setMeetingToEdit(null);
+                setIsScheduleModalOpen(true);
+              }}
               style={{ cursor: 'pointer' }}
             >
               <div className="icon-wrapper"><Calendar size={28} /></div>
@@ -326,7 +369,8 @@ const Dashboard = () => {
                       time: m.scheduledFor ? new Date(m.scheduledFor).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'TBD',
                       languageFlow: `${m.translationSettings?.meetingLanguage || 'English'} → ${m.translationSettings?.translationLanguage || 'Hindi'}`,
                       participants: `${m.participants?.length || 0} Participants`,
-                      translationStatus: m.settings?.liveTranslation ? 'Translation Enabled' : 'Translation Disabled'
+                      translationStatus: m.settings?.liveTranslation ? 'Translation Enabled' : 'Translation Disabled',
+                      raw: m
                     })}
                   >
                     <div className="m-time">
@@ -376,8 +420,13 @@ const Dashboard = () => {
 
       <ScheduleMeetingModal 
         isOpen={isScheduleModalOpen}
-        onClose={() => setIsScheduleModalOpen(false)}
+        onClose={() => {
+          setIsScheduleModalOpen(false);
+          setMeetingToEdit(null);
+        }}
         onSchedule={handleScheduleMeeting}
+        initialData={meetingToEdit}
+        isEdit={!!meetingToEdit}
       />
 
       <MeetingDetailsModal
@@ -385,6 +434,7 @@ const Dashboard = () => {
         onClose={() => setSelectedMeeting(null)}
         meeting={selectedMeeting}
         onStart={(id) => navigate(`/meet/${id}`)}
+        onEdit={(raw) => handleEditClick(raw)}
         onDelete={async (rawId) => {
           try {
             await fetch(`${BACKEND_URL}/meetings/${rawId}`, {

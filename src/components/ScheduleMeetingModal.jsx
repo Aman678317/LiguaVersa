@@ -10,7 +10,7 @@ const TIMEZONES = [
   'Indian Standard Time (IST)', 'Japan Standard Time (JST)'
 ];
 
-const ScheduleMeetingModal = ({ isOpen, onClose, onSchedule }) => {
+const ScheduleMeetingModal = ({ isOpen, onClose, onSchedule, initialData, isEdit }) => {
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -36,6 +36,41 @@ const ScheduleMeetingModal = ({ isOpen, onClose, onSchedule }) => {
     invitePush: true,
     inviteWhatsapp: false
   });
+
+  React.useEffect(() => {
+    if (isOpen) {
+      if (initialData && isEdit) {
+        setFormData(prev => ({ ...prev, ...initialData }));
+      } else {
+        // Reset form for new meeting
+        setFormData({
+          title: '',
+          description: '',
+          hostName: '',
+          date: '',
+          startTime: '',
+          endTime: '',
+          timeZone: 'Indian Standard Time (IST)',
+          meetingLanguage: 'English',
+          translationLanguage: 'Hindi',
+          meetingType: 'Video',
+          participants: '',
+          password: '',
+          waitingRoom: true,
+          recording: false,
+          liveTranslation: true,
+          liveCaptions: true,
+          aiSummary: true,
+          recurring: 'None',
+          reminder: '15 Minutes',
+          inviteEmail: true,
+          inviteInApp: true,
+          invitePush: true,
+          inviteWhatsapp: false
+        });
+      }
+    }
+  }, [isOpen, initialData, isEdit]);
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -65,8 +100,8 @@ const ScheduleMeetingModal = ({ isOpen, onClose, onSchedule }) => {
           onClick={(e) => e.stopPropagation()}
         >
           <div className="schedule-modal-header">
-            <h2><Calendar size={22} className="text-primary" /> Schedule Meeting</h2>
-            <button className="close-btn" onClick={onClose}><X size={20} /></button>
+            <h2><Calendar size={22} className="text-primary" /> {isEdit ? 'Edit Meeting Schedule' : 'Schedule Meeting'}</h2>
+            <button type="button" className="close-btn" onClick={onClose}><X size={20} /></button>
           </div>
 
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
@@ -220,7 +255,7 @@ const ScheduleMeetingModal = ({ isOpen, onClose, onSchedule }) => {
 
             <div className="schedule-modal-footer">
               <button type="button" className="btn-cancel" onClick={onClose}>Cancel</button>
-              <button type="submit" className="btn-schedule">Schedule</button>
+              <button type="submit" className="btn-schedule">{isEdit ? 'Save Changes' : 'Schedule'}</button>
             </div>
           </form>
         </motion.div>

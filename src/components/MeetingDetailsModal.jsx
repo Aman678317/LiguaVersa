@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Calendar, Clock, Users, Languages, Settings2, X, Video, Edit2, Trash2, Link as LinkIcon } from 'lucide-react';
 import './MeetingDetailsModal.css';
 
-const MeetingDetailsModal = ({ isOpen, onClose, meeting, onStart, onDelete }) => {
+const MeetingDetailsModal = ({ isOpen, onClose, meeting, onStart, onDelete, onEdit }) => {
   if (!isOpen || !meeting) return null;
 
   const handleCopyLink = () => {
@@ -66,7 +66,7 @@ const MeetingDetailsModal = ({ isOpen, onClose, meeting, onStart, onDelete }) =>
               <Video size={18} /> Start
             </button>
             
-            <button className="btn-action">
+            <button className="btn-action" onClick={() => onEdit && onEdit(meeting.raw)}>
               <Edit2 size={16} /> Edit
             </button>
             
