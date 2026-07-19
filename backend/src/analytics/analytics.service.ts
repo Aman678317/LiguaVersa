@@ -3,9 +3,9 @@ import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class AnalyticsService implements OnModuleInit, OnModuleDestroy {
-  private translationMetricsBuffer = [];
-  private errorLogsBuffer = [];
-  private flushInterval: NodeJS.Timeout;
+  private translationMetricsBuffer: any[] = [];
+  private errorLogsBuffer: any[] = [];
+  private flushInterval: any;
 
   constructor(private prisma: PrismaService) {}
 

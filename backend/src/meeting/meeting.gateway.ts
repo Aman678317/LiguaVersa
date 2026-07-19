@@ -28,7 +28,7 @@ export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect 
   private socketSettings = new Map<string, any>(); // socketId -> settings object
   private meetingStartTimes = new Map<string, number>(); // roomId -> startTime
   // Active translation sessions (mocking a pipeline manager)
-  private activeStreams = new Map<string, { buffer: Buffer[], timer: NodeJS.Timeout }>(); 
+  private activeStreams = new Map<string, { buffer: Buffer[], timer: NodeJS.Timeout | null }>(); 
 
   private async broadcastSystemHealth() {
     if (!this.server) return;
@@ -170,7 +170,7 @@ export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect 
   async handleChatMessage(@MessageBody() data: { message: string, sender: string, senderUserId: string, roomId: string, sourceLang: string }, @ConnectedSocket() client: Socket) {
     // 1. Detect language & save original message
     const detectedLang = data.sourceLang; // Fast path: assume sourceLang is accurate, can be enhanced with AI
-    let dbMessage = null;
+    let dbMessage: any = null;
     try {
       dbMessage = await this.chatService.saveMessage(data.roomId, data.senderUserId || 'unknown', data.message, detectedLang, 1.0);
     } catch (e) {
@@ -274,11 +274,11 @@ export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect 
   async handleTranslationChunk(@MessageBody() data: { sequenceId: number, audioChunk: ArrayBuffer, senderId: string, roomId: string, sourceLang: string }, @ConnectedSocket() client: Socket) {
     try {
       const buffer = Buffer.from(data.audioChunk);
-      let streamSession = this.activeStreams.get(client.id);
+      let streamSession = this.activeStreams.get(data.senderId);
       
       if (!streamSession) {
         streamSession = { buffer: [], timer: null };
-        this.activeStreams.set(client.id, streamSession);
+        this.activeStreams.set(data.senderId, streamSession);
       }
 
       streamSession.buffer.push(buffer);
@@ -331,7 +331,7 @@ export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect 
 
           // Save caption history asynchronously
           this.captionService.saveCaptionHistory(
-            data.senderUserId || 'unknown',
+            data.senderId || 'unknown',
             data.roomId,
             transcript,
             translatedText,

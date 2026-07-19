@@ -43,7 +43,7 @@ enum SubscriptionTier {
 model User {
   id              String    @id @default(uuid())
   email           String    @unique
-  password        String
+  password        String?
   role            Role      @default(USER)
   passwordHash    String?
   authProvider    String? // 'local', 'google', 'github', 'microsoft'
@@ -231,6 +231,7 @@ model Meeting {
   recordings   Recording[]
   invitations  MeetingInvitation[]
   callHistories CallHistory[]
+  speechHistories SpeechHistory[]
 
   @@index([hostId])
 }

@@ -208,6 +208,10 @@ const MeetingRoom = () => {
     });
 
     return () => {
+      if (socketRef.current) {
+        socketRef.current.emit('leave-room', { roomId: id });
+        socketRef.current.disconnect();
+      }
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop());
       }

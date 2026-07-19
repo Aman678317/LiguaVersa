@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import api from '../utils/api';
+import { BACKEND_URL } from '../config';
 import { useAuth } from '../context/AuthContext';
 import { io } from 'socket.io-client';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts';
@@ -25,8 +25,13 @@ export default function AdminDashboard() {
 
     const fetchStats = async () => {
       try {
-        const { data } = await api.get('/admin/dashboard');
-        setStats(data);
+        const response = await fetch(`${BACKEND_URL}/admin/dashboard`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setStats(data);
+        }
       } catch (err) {
         console.error("Failed to fetch admin stats", err);
       }
@@ -34,8 +39,13 @@ export default function AdminDashboard() {
     
     const fetchErrors = async () => {
       try {
-        const { data } = await api.get('/admin/errors');
-        setErrorLogs(data);
+        const response = await fetch(`${BACKEND_URL}/admin/errors`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setErrorLogs(data);
+        }
       } catch (err) {
         console.error("Failed to fetch errors", err);
       }
