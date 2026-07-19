@@ -51,7 +51,7 @@ const MeetingRoom = () => {
   
   // Translation & Subtitles State
   const [sourceLang, setSourceLang] = useState(user?.settings?.speechLanguage || 'English');
-  const [translationEnabled, setTranslationEnabled] = useState(false);
+  const [translationEnabled, setTranslationEnabled] = useState(user?.settings?.autoStartTranslation || false);
   const [targetVoice, setTargetVoice] = useState('alloy');
   const [isCaptionSettingsOpen, setIsCaptionSettingsOpen] = useState(false);
   const [captionSettings, setCaptionSettings] = useState({
@@ -184,6 +184,18 @@ const MeetingRoom = () => {
               return prev.filter(u => u !== data.sender);
             }
           });
+        });
+
+        socketRef.current.on('preferences:sync', (newSettings) => {
+          if (newSettings.speechLanguage) setSourceLang(newSettings.speechLanguage);
+          if (newSettings.captionFontSize) setCaptionSettings(prev => ({ ...prev, fontSize: newSettings.captionFontSize }));
+          if (newSettings.captionPosition) setCaptionSettings(prev => ({ ...prev, position: newSettings.captionPosition }));
+          if (newSettings.captionColor) setCaptionSettings(prev => ({ ...prev, color: newSettings.captionColor }));
+          if (newSettings.dualCaptionMode !== undefined) setCaptionSettings(prev => ({ ...prev, dualMode: newSettings.dualCaptionMode }));
+          if (newSettings.voiceGender || newSettings.voiceAccent) {
+            // A primitive mapping just to show voice changes apply
+            setTargetVoice(newSettings.voiceGender === 'female' ? 'nova' : 'alloy');
+          }
         });
       }).catch(err => {
         console.error("Failed to get media devices:", err);

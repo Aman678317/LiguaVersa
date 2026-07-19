@@ -407,8 +407,17 @@ model Setting {
   // New Preferences for Live Captions
   nativeLanguage      String?
   speechLanguage      String?
+  // Voice Preferences
+  voiceGender         String   @default("neutral") // male, female, neutral
+  voiceAccent         String   @default("standard") // standard, british, australian, indian, etc
+  voiceSpeed          Float    @default(1.0)
+  voicePitch          Float    @default(1.0)
+  voiceVolume         Float    @default(1.0)
+  emotionPreservation Boolean  @default(true)
+  originalVoiceVolume Float    @default(0.15) // Ducking volume
+  
+  // Caption Preferences
   captionLanguage     String?
-  translationLanguage String?
   captionFontSize     String   @default("medium")
   captionTheme        String   @default("dark")
   captionOpacity      Float    @default(0.7)
@@ -417,10 +426,21 @@ model Setting {
   dualCaptionMode     Boolean  @default(true)
   pinCaptions         Boolean  @default(false)
 
-  // Chat Translation Preferences
+  // Chat Preferences
   autoTranslateChat   Boolean  @default(true)
-  showOriginalMessage Boolean  @default(true)
+  alwaysShowOriginal  Boolean  @default(true)
+  translateVoiceMsgs  Boolean  @default(true)
   
+  // Meeting Preferences
+  autoStartTranslation Boolean @default(false)
+  autoStartCaptions    Boolean @default(false)
+  meetingSummaryLang   String?
+
+  // Accessibility Preferences
+  highContrastMode    Boolean  @default(false)
+  largeFonts          Boolean  @default(false)
+  colorBlindMode      Boolean  @default(false)
+
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 

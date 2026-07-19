@@ -70,7 +70,46 @@ export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect 
 
   @SubscribeMessage('set-language')
   handleSetLanguage(@MessageBody() data: any, @ConnectedSocket() client: Socket) {
-    this.socketSettings.set(client.id, data);
+    this.socketSettings.set(client.id, { ...(this.socketSettings.get(client.id) || {}), ...data });
+  }
+
+  // --- Live Settings Sync Events ---
+
+  @SubscribeMessage('settings:update')
+  handleSettingsUpdate(@MessageBody() data: any, @ConnectedSocket() client: Socket) {
+    this.socketSettings.set(client.id, { ...(this.socketSettings.get(client.id) || {}), ...data });
+    // Broadcast preferences:sync to all sockets belonging to this userId
+    const userId = client.handshake.query.userId as string;
+    if (userId) {
+      // For simplicity, we just send to the sender for immediate local apply
+      client.emit('preferences:sync', data);
+    }
+  }
+
+  @SubscribeMessage('language:change')
+  handleLanguageChange(@MessageBody() data: { lang: string }, @ConnectedSocket() client: Socket) {
+    const current = this.socketSettings.get(client.id) || {};
+    this.socketSettings.set(client.id, { ...current, lang: data.lang, translationLanguage: data.lang });
+    client.emit('preferences:sync', { speechLanguage: data.lang });
+  }
+
+  @SubscribeMessage('translation:toggle')
+  handleTranslationToggle(@MessageBody() data: { enabled: boolean }, @ConnectedSocket() client: Socket) {
+    const current = this.socketSettings.get(client.id) || {};
+    this.socketSettings.set(client.id, { ...current, translationEnabled: data.enabled });
+  }
+
+  @SubscribeMessage('caption:toggle')
+  handleCaptionToggle(@MessageBody() data: { enabled: boolean }, @ConnectedSocket() client: Socket) {
+    const current = this.socketSettings.get(client.id) || {};
+    this.socketSettings.set(client.id, { ...current, dualCaptionMode: data.enabled });
+    client.emit('preferences:sync', { dualCaptionMode: data.enabled });
+  }
+
+  @SubscribeMessage('voice:update')
+  handleVoiceUpdate(@MessageBody() data: { targetVoice: string }, @ConnectedSocket() client: Socket) {
+    const current = this.socketSettings.get(client.id) || {};
+    this.socketSettings.set(client.id, { ...current, translationVoice: data.targetVoice });
   }
 
   // --- Enterprise Multilingual Chat ---

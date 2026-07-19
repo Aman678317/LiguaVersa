@@ -42,12 +42,36 @@ export const AuthProvider = ({ children }) => {
     setToken(newToken);
   };
 
+  const updateSettings = async (newSettings) => {
+    try {
+      const res = await fetch(`${BACKEND_URL}/users/settings`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(newSettings)
+      });
+      const data = await res.json();
+      if (data.success) {
+        setUser(prev => ({
+          ...prev,
+          settings: { ...prev.settings, ...data.settings }
+        }));
+        return true;
+      }
+    } catch (e) {
+      console.error("Failed to update settings:", e);
+    }
+    return false;
+  };
+
   const logout = () => {
     setToken(null);
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, login, logout }}>
+    <AuthContext.Provider value={{ user, token, login, logout, updateSettings, setUser }}>
       {children}
     </AuthContext.Provider>
   );

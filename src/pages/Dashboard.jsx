@@ -178,7 +178,7 @@ const Dashboard = () => {
           <button className={`nav-item ${activeTab === 'history' ? 'active' : ''}`} onClick={() => setActiveTab('history')}>
             <Clock size={20} /> History
           </button>
-          <button className={`nav-item ${activeTab === 'settings' ? 'active' : ''}`} onClick={() => setActiveTab('settings')}>
+          <button className="nav-item" onClick={() => navigate('/settings')}>
             <Settings size={20} /> Settings
           </button>
         </nav>
@@ -269,8 +269,6 @@ const Dashboard = () => {
             <ContactsTab currentUserId={user?.id} onCallContact={handleCallContact} onlineUsers={onlineUsers} />
           ) : activeTab === 'history' ? (
             <HistoryTab />
-          ) : activeTab === 'settings' ? (
-            <SettingsTab />
           ) : (
             <div className="coming-soon">
               <h2>Coming Soon</h2>
