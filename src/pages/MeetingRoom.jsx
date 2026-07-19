@@ -13,6 +13,7 @@ import { BACKEND_URL } from '../config';
 import '../components/meeting/Meeting.css';
 import { RecordingManager } from '../utils/RecordingManager';
 import { exportCaptions } from '../utils/CaptionExporter';
+import { AudioMixer } from '../utils/AudioMixer';
 
 import { useRealTimeTranslation } from '../hooks/useRealTimeTranslation';
 import { TranslationPanel } from '../components/translation/TranslationPanel';
@@ -54,6 +55,50 @@ const MeetingRoom = () => {
   const sourceLangRef = useRef(sourceLang);
   useEffect(() => { sourceLangRef.current = sourceLang; }, [sourceLang]);
 
+  const socketRef = useRef();
+  const peersRef = useRef([]); // Stores peer instances
+  const streamRef = useRef();
+  const screenStreamRef = useRef(null);
+  const startTime = useRef(Date.now());
+  const audioMixerRef = useRef(null);
+
+  // Real-Time Voice Translation Hook
+  const { 
+    captions, 
+    latency, 
+    isTranslating, 
+    startRecording, 
+    stopRecording,
+    audioContext
+  } = useRealTimeTranslation(
+    socketRef.current, 
+    id, 
+    socketRef.current?.id || user?.id || 'local', 
+    sourceLang, 
+    translationEnabled
+  );
+
+  // Set up AudioMixer when audioContext becomes available
+  useEffect(() => {
+    if (audioContext && !audioMixerRef.current) {
+      audioMixerRef.current = new AudioMixer(audioContext);
+    }
+  }, [audioContext]);
+
+  // Handle Ducking when translated audio plays
+  useEffect(() => {
+    const handleTranslationPlaying = (e) => {
+      if (audioMixerRef.current) {
+        audioMixerRef.current.duckOriginal(0.15);
+        setTimeout(() => {
+          audioMixerRef.current.restoreOriginal(1.0);
+        }, e.detail.duration * 1000 + 500); // Wait until translated speech ends + 500ms
+      }
+    };
+    window.addEventListener('translation:playing', handleTranslationPlaying);
+    return () => window.removeEventListener('translation:playing', handleTranslationPlaying);
+  }, []);
+
   useEffect(() => {
     if (socketRef.current) {
       const settings = user?.settings || {};
@@ -67,27 +112,6 @@ const MeetingRoom = () => {
     }
   }, [sourceLang, translationEnabled, targetVoice, user]);
 
-  const socketRef = useRef();
-  const peersRef = useRef([]); // Stores peer instances
-  const streamRef = useRef();
-  const screenStreamRef = useRef(null);
-  const startTime = useRef(Date.now());
-
-  // Real-Time Voice Translation Hook
-  const { 
-    captions, 
-    latency, 
-    isTranslating, 
-    startRecording, 
-    stopRecording 
-  } = useRealTimeTranslation(
-    socketRef.current, 
-    id, 
-    socketRef.current?.id || user?.id || 'local', 
-    sourceLang, 
-    translationEnabled
-  );
-
   useEffect(() => {
     socketRef.current = io(BACKEND_URL, {
       transports: ['websocket'],
@@ -97,7 +121,6 @@ const MeetingRoom = () => {
       console.log('✅ Connected to Backend!', socketRef.current.id);
       setBackendStatus('Connected to Backend');
       
-      // Ensure backend knows our language immediately upon connection
       const langName = LANGUAGES.find(l => l.code === sourceLangRef.current)?.name || 'English';
       const settings = user?.settings || {};
       socketRef.current.emit('set-language', { 
@@ -107,11 +130,9 @@ const MeetingRoom = () => {
         translationLanguage: LANGUAGES.find(l => l.code === (settings.translationLanguage || 'en-US'))?.name || 'English'
       });
       
-      // Request Camera and Mic permissions
       navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then((stream) => {
         streamRef.current = stream;
         
-        // Add self to participants
         setParticipants([{
           id: socketRef.current.id,
           name: 'You',
@@ -124,30 +145,23 @@ const MeetingRoom = () => {
 
         socketRef.current.emit('join-room', { roomId: id });
         
-        // When someone else joins, WE initiate the call to them
         socketRef.current.on('user-joined', (data) => {
-          console.log('👤 User joined, initiating call:', data.userId);
           const peer = createPeer(data.userId, socketRef.current.id, stream);
           peersRef.current.push({ peerID: data.userId, peer });
         });
 
-        // When we receive an offer from an initiator, we answer it
         socketRef.current.on('offer', (data) => {
-          console.log('📥 Received offer from:', data.callerId);
           const peer = addPeer(data.offer, data.callerId, stream);
           peersRef.current.push({ peerID: data.callerId, peer });
         });
 
-        // When we receive an answer to our offer
         socketRef.current.on('answer', (data) => {
-          console.log('📥 Received answer from:', data.callerId);
           const item = peersRef.current.find(p => p.peerID === data.callerId);
           if (item) {
             item.peer.signal(data.answer);
           }
         });
 
-        // Handle incoming chat messages
         socketRef.current.on('chat-message', (data) => {
           setChatMessages(prev => [...prev, data]);
         });
@@ -173,7 +187,6 @@ const MeetingRoom = () => {
     };
   }, [id]);
 
-  // Create a peer (Initiator)
   function createPeer(userToSignal, callerID, stream) {
     const peer = new Peer({
       initiator: true,
@@ -206,7 +219,6 @@ const MeetingRoom = () => {
     return peer;
   }
 
-  // Answer a peer (Receiver)
   function addPeer(incomingSignal, callerID, stream) {
     const peer = new Peer({
       initiator: false,
@@ -240,7 +252,6 @@ const MeetingRoom = () => {
     return peer;
   }
 
-  // Chat Functionality
   const sendMessage = (text) => {
     if (!text.trim()) return;
     const msgData = {
@@ -249,28 +260,23 @@ const MeetingRoom = () => {
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
     
-    // Add to local state
     setChatMessages(prev => [...prev, msgData]);
-    
     const sourceName = LANGUAGES.find(l => l.code === sourceLangRef.current)?.name || 'English';
 
-    // Send to server
     socketRef.current.emit('chat-message', {
       message: text,
-      sender: 'Remote User', // To others, we are the remote user
+      sender: 'Remote User',
       roomId: id,
       sourceLang: sourceName
     });
   };
 
-  // Screen Share Functionality
   const toggleScreenShare = async () => {
     if (!isScreenSharing) {
       try {
         const screenStream = await navigator.mediaDevices.getDisplayMedia({ cursor: true });
         screenStreamRef.current = screenStream;
         
-        // Replace video track in all peers
         const videoTrack = streamRef.current.getVideoTracks()[0];
         const screenTrack = screenStream.getVideoTracks()[0];
         
@@ -278,11 +284,9 @@ const MeetingRoom = () => {
           item.peer.replaceTrack(videoTrack, screenTrack, streamRef.current);
         });
         
-        // Update local video tile
         setParticipants(prev => prev.map(p => p.isLocal ? { ...p, stream: screenStream } : p));
         setIsScreenSharing(true);
 
-        // When user clicks "Stop sharing" on the browser popup
         screenTrack.onended = () => {
           stopScreenShare();
         };
@@ -300,19 +304,8 @@ const MeetingRoom = () => {
       screenStreamRef.current = null;
     }
     
-    // Switch back to webcam
     const videoTrack = streamRef.current.getVideoTracks()[0];
-    
     peersRef.current.forEach(item => {
-      // We don't have the old screen track reference easily accessible in this scope for all peers,
-      // but simple-peer allows us to re-add the old track or we can fetch the current track from the peer.
-      // Easiest is to re-trigger replaceTrack.
-      const currentStream = item.peer.streams[0]; // This is incoming stream, wait.
-      // simple-peer replaceTrack requires (oldTrack, newTrack, stream)
-      // Since we modified the stream, we just need to replace the sender's track.
-      // Actually simple-peer needs the exact old track.
-      // For simplicity in this demo, let's just force a reload or handle it via a new stream.
-      // The robust way is keeping track of the old track. Let's do it robustly:
       const screenTrack = item.peer._pc.getSenders().find(s => s.track.kind === 'video').track;
       if (screenTrack && videoTrack) {
         item.peer.replaceTrack(screenTrack, videoTrack, streamRef.current);
@@ -323,7 +316,6 @@ const MeetingRoom = () => {
     setIsScreenSharing(false);
   };
 
-  // Toggle Mute & Language
   useEffect(() => {
     if (streamRef.current) {
       const audioTrack = streamRef.current.getAudioTracks()[0];
@@ -340,7 +332,6 @@ const MeetingRoom = () => {
     }
   }, [isMuted, translationEnabled, sourceLang, startRecording, stopRecording]);
 
-  // Toggle Video
   useEffect(() => {
     if (streamRef.current && !isScreenSharing) {
       const videoTrack = streamRef.current.getVideoTracks()[0];
@@ -362,20 +353,15 @@ const MeetingRoom = () => {
 
   const handleLeave = async () => {
     const duration = Math.floor((Date.now() - startTime.current) / 1000);
-    
     try {
       await fetch(`${BACKEND_URL}/history/end`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ meetingCode: id, duration })
       });
     } catch (e) {
       console.error('Failed to save history', e);
     }
-    
     navigate(`/summary/${id}`);
   };
 
@@ -383,7 +369,6 @@ const MeetingRoom = () => {
     if (!recordingManagerRef.current) {
       recordingManagerRef.current = new RecordingManager(id, token);
     }
-    // For prototype: we record the local stream. If user shared screen, streamRef has screen.
     if (streamRef.current) {
       await recordingManagerRef.current.startRecording(streamRef.current);
       setIsRecording(true);
@@ -432,13 +417,8 @@ const MeetingRoom = () => {
                   alert("Meeting Link Copied! Send it to a friend to join the call.");
                 }}
                 style={{
-                  background: 'rgba(110, 86, 255, 0.2)',
-                  border: '1px solid #6E56FF',
-                  color: 'white',
-                  padding: '6px 12px',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  fontSize: '0.85rem'
+                  background: 'rgba(110, 86, 255, 0.2)', border: '1px solid #6E56FF', color: 'white',
+                  padding: '6px 12px', borderRadius: '8px', cursor: 'pointer', fontSize: '0.85rem'
                 }}
               >
                 Copy Invite Link
@@ -456,6 +436,7 @@ const MeetingRoom = () => {
             </div>
           </div>
 
+          {/* WebRTC Video component handles audio context ducking globally */}
           <VideoGrid participants={participants} translationEnabled={translationEnabled} />
           
           <LiveCaptions captions={captions} isEnabled={translationEnabled} />
