@@ -1,7 +1,18 @@
 import React, { useState } from 'react';
-import { Bot, Send, User, Loader2 } from 'lucide-react';
+import { Bot, Send, User, Loader2, Globe } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { BACKEND_URL } from '../config';
+
+const LANGUAGES = [
+  { code: 'en-US', name: 'English' },
+  { code: 'es-ES', name: 'Spanish' },
+  { code: 'fr-FR', name: 'French' },
+  { code: 'de-DE', name: 'German' },
+  { code: 'zh-CN', name: 'Chinese' },
+  { code: 'ja-JP', name: 'Japanese' },
+  { code: 'hi-IN', name: 'Hindi' },
+  { code: 'mr-IN', name: 'Marathi' },
+];
 
 const AIChatBot = ({ meetingCode, token }) => {
   const [messages, setMessages] = useState([
@@ -9,6 +20,7 @@ const AIChatBot = ({ meetingCode, token }) => {
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [botLanguage, setBotLanguage] = useState('English');
 
   const handleSend = async () => {
     if (!input.trim()) return;
@@ -25,7 +37,7 @@ const AIChatBot = ({ meetingCode, token }) => {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ question: userMessage.text })
+        body: JSON.stringify({ question: userMessage.text, language: botLanguage })
       });
       const data = await res.json();
       
@@ -44,9 +56,23 @@ const AIChatBot = ({ meetingCode, token }) => {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '500px', background: 'rgba(0,0,0,0.3)', borderRadius: '16px', overflow: 'hidden' }}>
-      <div style={{ padding: '16px', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', gap: '10px' }}>
-        <Bot color="#00FFA3" size={24} />
-        <h3 style={{ margin: 0, fontSize: '1.2rem', color: '#fff' }}>AI Assistant</h3>
+      <div style={{ padding: '16px', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <Bot color="#00FFA3" size={24} />
+          <h3 style={{ margin: 0, fontSize: '1.2rem', color: '#fff' }}>AI Assistant</h3>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(255,255,255,0.05)', padding: '4px 12px', borderRadius: '20px' }}>
+          <Globe size={14} color="#00FFA3" />
+          <select 
+            value={botLanguage} 
+            onChange={(e) => setBotLanguage(e.target.value)}
+            style={{ background: 'transparent', color: '#fff', border: 'none', outline: 'none', fontSize: '0.85rem', cursor: 'pointer' }}
+          >
+            {LANGUAGES.map(lang => (
+              <option key={lang.code} value={lang.name} style={{ color: '#000' }}>{lang.name}</option>
+            ))}
+          </select>
+        </div>
       </div>
       
       <div style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: '16px' }}>

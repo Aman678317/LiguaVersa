@@ -129,7 +129,7 @@ export class TranslationService {
     }
   }
 
-  async aiChatQuery(meetingId: string, question: string): Promise<string> {
+  async aiChatQuery(meetingId: string, question: string, language?: string): Promise<string> {
     if (!this.openai) {
       return "Mock AI response. Please configure OpenRouter API Key.";
     }
@@ -171,7 +171,13 @@ export class TranslationService {
         contextStr += `Meeting Summary:\n${meetingSummary.summary}\n\nKey Points:\n${JSON.stringify(meetingSummary.keyPoints)}\n\nAction Items:\n${JSON.stringify(meetingSummary.actionItems)}\n\n`;
       }
 
-      const prompt = `You are a helpful AI assistant tasked with answering questions about a specific meeting. Use the provided meeting transcript and summary to answer the user's question accurately and concisely. If the answer cannot be found in the provided context, state that you don't know based on the meeting records.\n\nContext:\n${contextStr}\n\nUser Question: ${question}\n\nAnswer:`;
+      let prompt = `You are a helpful AI assistant tasked with answering questions about a specific meeting. Use the provided meeting transcript and summary to answer the user's question accurately and concisely. If the answer cannot be found in the provided context, state that you don't know based on the meeting records.`;
+      
+      if (language && language !== 'English') {
+        prompt += `\n\nCRITICAL INSTRUCTION: You MUST answer the user's question entirely in ${language}.`;
+      }
+      
+      prompt += `\n\nContext:\n${contextStr}\n\nUser Question: ${question}\n\nAnswer:`;
       
       const response = await this.openai.chat.completions.create({
         model: this.defaultModel,

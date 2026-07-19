@@ -60,12 +60,12 @@ export class MeetingController {
   }
 
   @Post('summary/:code/chat')
-  async chatWithSummary(@Param('code') code: string, @Body('question') question: string) {
+  async chatWithSummary(@Param('code') code: string, @Body('question') question: string, @Body('language') language?: string) {
     const summaryData = await this.meetingService.getMeetingSummary(code);
     if (!summaryData || !summaryData.meeting) {
       return { answer: 'Meeting not found.' };
     }
-    const answer = await this.translationService.aiChatQuery(summaryData.meeting.id, question);
+    const answer = await this.translationService.aiChatQuery(summaryData.meeting.id, question, language);
     return { answer };
   }
 
