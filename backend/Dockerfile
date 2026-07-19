@@ -39,4 +39,4 @@ USER node
 EXPOSE 5000
 
 # Start command
-CMD ["node", "dist/main"]
+CMD ["node", "dist/src/main"]
