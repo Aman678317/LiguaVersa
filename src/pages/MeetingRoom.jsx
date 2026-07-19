@@ -63,6 +63,7 @@ const MeetingRoom = () => {
     dualMode: user?.settings?.dualCaptionMode !== false,
     opacity: user?.settings?.captionOpacity || 0.7
   });
+  const [isCaptionSettingsOpen, setIsCaptionSettingsOpen] = useState(false);
   
   const sourceLangRef = useRef(sourceLang);
   useEffect(() => { sourceLangRef.current = sourceLang; }, [sourceLang]);
