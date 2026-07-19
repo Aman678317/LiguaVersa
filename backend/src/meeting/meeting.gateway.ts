@@ -353,12 +353,14 @@ export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect 
           // Text to Speech
           const audioBuffer = await this.ttsService.generateSpeech(translatedText, targetVoice);
           
-          this.server.to(socket.id).emit('translation:audio-out', {
+          // SEND TTS AUDIO ONLY TO THE SENDER (client.id) SO SENDER CAN SEND VIA WEBRTC
+          this.server.to(client.id).emit('translation:audio-out', {
             senderId: data.senderId,
             sequenceId: data.sequenceId,
             audioData: audioBuffer,
             translatedText: translatedText,
             targetLang: targetLang,
+            targetSocketId: socket.id // To identify which peer this track is for
           });
         }));
       }, 800);

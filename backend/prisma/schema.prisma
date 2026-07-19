@@ -217,6 +217,11 @@ model Meeting {
   hostId       String
   title        String
   description  String?
+  password     String?
+  waitingRoom  Boolean       @default(false)
+  type         String        @default("Video") // Video, Voice, Webinar
+  timezone     String        @default("UTC")
+  recurringType String       @default("None") // None, Daily, Weekly, Monthly, Custom
   status       MeetingStatus @default(SCHEDULED)
   scheduledFor DateTime?
   startedAt    DateTime?
@@ -233,6 +238,10 @@ model Meeting {
   invitations  MeetingInvitation[]
   callHistories CallHistory[]
   speechHistories SpeechHistory[]
+  reminders       MeetingReminder[]
+  settings        MeetingSettings?
+  translationSettings MeetingTranslationSettings?
+  summaries       MeetingSummary[]
 
   @@index([hostId])
 }
@@ -240,7 +249,9 @@ model Meeting {
 model MeetingParticipant {
   id                  String    @id @default(uuid())
   meetingId           String
-  userId              String
+  userId              String?
+  email               String?   // For external invitees
+  status              String    @default("PENDING") // PENDING, ACCEPTED, DECLINED
   joinedAt            DateTime  @default(now())
   leftAt              DateTime?
   isMuted             Boolean   @default(false)
@@ -251,7 +262,7 @@ model MeetingParticipant {
   deletedAt           DateTime?
 
   meeting           Meeting         @relation(fields: [meetingId], references: [id], onDelete: Cascade)
-  user              User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user              User?           @relation(fields: [userId], references: [id], onDelete: Cascade)
   preferredLanguage Language?       @relation(fields: [preferredLanguageId], references: [id])
   speechHistories   SpeechHistory[]
 
@@ -553,4 +564,51 @@ model CallHistory {
 
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   meeting Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+}
+
+model MeetingReminder {
+  id        String    @id @default(uuid())
+  meetingId String
+  timeStr   String    // e.g., '15 Minutes', '1 Hour'
+  sentAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  meeting   Meeting   @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+}
+
+model MeetingSettings {
+  id              String   @id @default(uuid())
+  meetingId       String   @unique
+  liveTranslation Boolean  @default(true)
+  liveCaptions    Boolean  @default(true)
+  aiSummary       Boolean  @default(true)
+  recording       Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  meeting         Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+}
+
+model MeetingTranslationSettings {
+  id                  String   @id @default(uuid())
+  meetingId           String   @unique
+  meetingLanguage     String   @default("English")
+  translationLanguage String   @default("Hindi")
+  defaultVoice        String   @default("alloy")
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  meeting             Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+}
+
+model MeetingSummary {
+  id          String   @id @default(uuid())
+  meetingId   String
+  summary     String?
+  actionItems Json?
+  keyPoints   Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  meeting     Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
 }

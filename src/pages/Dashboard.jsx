@@ -10,6 +10,9 @@ import IncomingCallModal from '../components/IncomingCallModal';
 import ContactsTab from '../components/ContactsTab';
 import HistoryTab from '../components/HistoryTab';
 import SettingsTab from '../components/SettingsTab';
+import ScheduleMeetingModal from '../components/ScheduleMeetingModal';
+import CalendarTab from '../components/CalendarTab';
+import MeetingDetailsModal from '../components/MeetingDetailsModal';
 import './Dashboard.css';
 
 const Dashboard = () => {
@@ -22,7 +25,29 @@ const Dashboard = () => {
   const { token, user } = useAuth();
   const [createdMeetingCode, setCreatedMeetingCode] = useState(null);
   const [incomingCall, setIncomingCall] = useState(null);
-  const [onlineUsers, setOnlineUsers] = useState(new Set());
+  const [upcomingMeetings, setUpcomingMeetings] = useState([]);
+  const [allMeetings, setAllMeetings] = useState([]);
+
+  const fetchMeetings = async () => {
+    if (!token) return;
+    try {
+      const response = await fetch(`${BACKEND_URL}/meetings`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await response.json();
+      if (Array.isArray(data)) {
+        setAllMeetings(data);
+        const upcoming = data.filter(m => m.status === 'SCHEDULED' || new Date(m.scheduledFor) > new Date());
+        setUpcomingMeetings(upcoming);
+      }
+    } catch (err) {
+      console.error("Failed to fetch meetings", err);
+    }
+  };
+
+  React.useEffect(() => {
+    fetchMeetings();
+  }, [token]);
 
   React.useEffect(() => {
     // Request notification permissions
@@ -159,6 +184,32 @@ const Dashboard = () => {
     }
   };
 
+  const handleScheduleMeeting = async (formData) => {
+    setIsCreating(true);
+    try {
+      const response = await fetch(`${BACKEND_URL}/meetings`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}` 
+        },
+        body: JSON.stringify(formData)
+      });
+      const data = await response.json();
+      if (data.success || data.meetingId) {
+        alert(`Meeting "${formData.title}" scheduled successfully!`);
+        fetchMeetings();
+      } else {
+        alert('Failed to schedule meeting.');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Error scheduling meeting.');
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
   return (
     <div className="dashboard-container">
       {/* Sidebar */}
@@ -171,6 +222,9 @@ const Dashboard = () => {
         <nav className="dash-nav">
           <button className={`nav-item ${activeTab === 'home' ? 'active' : ''}`} onClick={() => setActiveTab('home')}>
             <Video size={20} /> Home
+          </button>
+          <button className={`nav-item ${activeTab === 'calendar' ? 'active' : ''}`} onClick={() => setActiveTab('calendar')}>
+            <Calendar size={20} /> Calendar
           </button>
           <button className={`nav-item ${activeTab === 'contacts' ? 'active' : ''}`} onClick={() => setActiveTab('contacts')}>
             <Users size={20} /> Contacts
@@ -241,7 +295,12 @@ const Dashboard = () => {
               {joinError && <div style={{ color: '#ff4444', fontSize: '0.8rem', marginTop: '8px' }}>{joinError}</div>}
             </motion.div>
 
-            <motion.div className="action-card schedule glass-card" whileHover={{ scale: 1.02 }}>
+            <motion.div 
+              className="action-card schedule glass-card" 
+              whileHover={{ scale: 1.02 }}
+              onClick={() => setIsScheduleModalOpen(true)}
+              style={{ cursor: 'pointer' }}
+            >
               <div className="icon-wrapper"><Calendar size={28} /></div>
               <h3>Schedule</h3>
               <p>Plan a meeting for later</p>
@@ -251,20 +310,45 @@ const Dashboard = () => {
           <div className="upcoming-meetings">
             <h2>Upcoming Meetings</h2>
             <div className="meeting-list">
-              <div className="meeting-item glass">
-                <div className="m-time">
-                  <span className="m-hour">10:00 AM</span>
-                  <span className="m-duration">45 Min</span>
-                </div>
-                <div className="m-details">
-                  <h4>Global Marketing Sync</h4>
-                  <p>English ➔ Japanese | 4 Participants</p>
-                </div>
-                <button className="btn-secondary small" onClick={() => navigate('/meet/demo')}>Start</button>
-              </div>
+              {upcomingMeetings.length === 0 ? (
+                <div style={{ color: '#888', fontStyle: 'italic', padding: '12px' }}>No upcoming meetings scheduled.</div>
+              ) : (
+                upcomingMeetings.map(m => (
+                  <div 
+                    key={m.id}
+                    className="meeting-item glass" 
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => setSelectedMeeting({
+                      id: m.meetingCode,
+                      rawId: m.id,
+                      title: m.title,
+                      date: m.scheduledFor ? new Date(m.scheduledFor).toLocaleDateString() : 'TBD',
+                      time: m.scheduledFor ? new Date(m.scheduledFor).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'TBD',
+                      languageFlow: `${m.translationSettings?.meetingLanguage || 'English'} → ${m.translationSettings?.translationLanguage || 'Hindi'}`,
+                      participants: `${m.participants?.length || 0} Participants`,
+                      translationStatus: m.settings?.liveTranslation ? 'Translation Enabled' : 'Translation Disabled'
+                    })}
+                  >
+                    <div className="m-time">
+                      <span className="m-hour">{m.scheduledFor ? new Date(m.scheduledFor).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'TBD'}</span>
+                      <span className="m-duration">60 Min</span>
+                    </div>
+                    <div className="m-details">
+                      <h4>{m.title}</h4>
+                      <p>{m.translationSettings?.meetingLanguage || 'English'} ➔ {m.translationSettings?.translationLanguage || 'Hindi'} | {m.participants?.length || 0} Participants</p>
+                    </div>
+                    <button className="btn-secondary small" onClick={(e) => {
+                      e.stopPropagation();
+                      navigate(`/meet/${m.meetingCode}`);
+                    }}>Start</button>
+                  </div>
+                ))
+              )}
             </div>
           </div>
           </>
+          ) : activeTab === 'calendar' ? (
+            <CalendarTab events={allMeetings} onEventClick={(event) => setSelectedMeeting(event)} />
           ) : activeTab === 'contacts' ? (
             <ContactsTab currentUserId={user?.id} onCallContact={handleCallContact} onlineUsers={onlineUsers} />
           ) : activeTab === 'history' ? (
@@ -288,6 +372,31 @@ const Dashboard = () => {
         invitation={incomingCall} 
         onAccept={() => setIncomingCall(null)} 
         onDecline={() => setIncomingCall(null)} 
+      />
+
+      <ScheduleMeetingModal 
+        isOpen={isScheduleModalOpen}
+        onClose={() => setIsScheduleModalOpen(false)}
+        onSchedule={handleScheduleMeeting}
+      />
+
+      <MeetingDetailsModal
+        isOpen={!!selectedMeeting}
+        onClose={() => setSelectedMeeting(null)}
+        meeting={selectedMeeting}
+        onStart={(id) => navigate(`/meet/${id}`)}
+        onDelete={async (rawId) => {
+          try {
+            await fetch(`${BACKEND_URL}/meetings/${rawId}`, {
+              method: 'DELETE',
+              headers: { 'Authorization': `Bearer ${token}` }
+            });
+            fetchMeetings();
+            setSelectedMeeting(null);
+          } catch (e) {
+            console.error("Failed to delete", e);
+          }
+        }}
       />
     </div>
   );

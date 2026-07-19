@@ -1,0 +1,121 @@
+.calendar-tab {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 24px;
+  color: #fff;
+}
+
+.calendar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.calendar-header h2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.calendar-nav {
+  display: flex;
+  gap: 12px;
+}
+
+.calendar-nav button {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #fff;
+  padding: 8px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.calendar-nav button:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 1px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.calendar-day-header {
+  background: rgba(0, 0, 0, 0.4);
+  padding: 12px;
+  text-align: center;
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.calendar-day-cell {
+  background: rgba(20, 20, 30, 0.9);
+  min-height: 120px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.calendar-day-cell.empty {
+  background: rgba(10, 10, 15, 0.9);
+}
+
+.calendar-day-cell.today .day-number {
+  background: #6E56FF;
+  color: #fff;
+  border-radius: 50%;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.day-number {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.8);
+  margin-bottom: 4px;
+}
+
+.calendar-event {
+  background: rgba(110, 86, 255, 0.2);
+  border-left: 3px solid #6E56FF;
+  padding: 6px 8px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.calendar-event:hover {
+  transform: translateY(-2px);
+  background: rgba(110, 86, 255, 0.3);
+}
+
+.calendar-event .event-time {
+  font-weight: 600;
+  color: #00FFA3;
+  margin-bottom: 2px;
+}
+
+.calendar-event .event-title {
+  font-weight: 500;
+  color: #fff;
+  margin-bottom: 2px;
+}
+
+.calendar-event .event-desc {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.75rem;
+}

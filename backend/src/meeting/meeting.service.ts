@@ -15,7 +15,7 @@ export class MeetingService {
     return `LVA-${randomStr(4)}-${randomStr(4)}`;
   }
 
-  async createMeeting(data: { title: string; description?: string; hostId: string }) {
+  async createMeeting(data: any) {
     const meetingCode = this.generateMeetingCode();
     
     const meeting = await this.prisma.meeting.create({
@@ -24,49 +24,126 @@ export class MeetingService {
         title: data.title || 'New Meeting',
         description: data.description,
         meetingCode: meetingCode,
+        password: data.password || null,
+        waitingRoom: data.waitingRoom ?? false,
+        type: data.meetingType || 'Video',
+        timezone: data.timeZone || 'UTC',
+        recurringType: data.recurring || 'None',
+        scheduledFor: data.date && data.startTime ? new Date(`${data.date}T${data.startTime}:00Z`) : null,
+        settings: {
+          create: {
+            liveTranslation: data.liveTranslation ?? true,
+            liveCaptions: data.liveCaptions ?? true,
+            aiSummary: data.aiSummary ?? true,
+            recording: data.recording ?? false,
+          }
+        },
+        translationSettings: {
+          create: {
+            meetingLanguage: data.meetingLanguage || 'English',
+            translationLanguage: data.translationLanguage || 'Hindi',
+          }
+        }
+      },
+      include: {
+        settings: true,
+        translationSettings: true
       }
     });
 
-    return { meetingCode: meeting.meetingCode, meetingId: meeting.id };
+    if (data.reminder && data.reminder !== 'None') {
+      await this.prisma.meetingReminder.create({
+        data: { meetingId: meeting.id, timeStr: data.reminder }
+      });
+    }
+
+    if (data.participants) {
+      const emails = data.participants.split(',').map(e => e.trim()).filter(e => e);
+      for (const email of emails) {
+        await this.prisma.meetingParticipant.create({
+          data: { meetingId: meeting.id, email }
+        });
+      }
+    }
+
+    return { success: true, meeting };
+  }
+
+  async getMeetings(userId: string) {
+    return this.prisma.meeting.findMany({
+      where: { hostId: userId },
+      include: {
+        participants: true,
+        settings: true,
+        translationSettings: true
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+  }
+
+  async getMeetingById(id: string, userId: string) {
+    const meeting = await this.prisma.meeting.findUnique({
+      where: { id },
+      include: { settings: true, translationSettings: true, participants: true }
+    });
+    if (!meeting) throw new NotFoundException('Meeting not found');
+    return meeting;
+  }
+
+  async updateMeeting(id: string, data: any, userId: string) {
+    const meeting = await this.prisma.meeting.findUnique({ where: { id } });
+    if (!meeting || meeting.hostId !== userId) throw new BadRequestException('Unauthorized');
+
+    return this.prisma.meeting.update({
+      where: { id },
+      data: {
+        title: data.title,
+        description: data.description,
+        password: data.password,
+        scheduledFor: data.date && data.startTime ? new Date(`${data.date}T${data.startTime}:00Z`) : undefined,
+      }
+    });
+  }
+
+  async deleteMeeting(id: string, userId: string) {
+    const meeting = await this.prisma.meeting.findUnique({ where: { id } });
+    if (!meeting || meeting.hostId !== userId) throw new BadRequestException('Unauthorized');
+    
+    await this.prisma.meeting.delete({ where: { id } });
+    return { success: true };
+  }
+
+  async joinMeeting(id: string, password?: string, userId?: string) {
+    const meeting = await this.prisma.meeting.findUnique({ where: { id } });
+    if (!meeting) throw new NotFoundException('Meeting not found');
+    
+    if (meeting.password && meeting.password !== password) {
+      throw new BadRequestException('Invalid password');
+    }
+
+    if (meeting.waitingRoom && meeting.hostId !== userId) {
+      return { success: true, waiting: true, message: 'Joined waiting room' };
+    }
+
+    return { success: true, meetingId: meeting.id, meetingCode: meeting.meetingCode };
   }
 
   async validateMeetingCode(code: string) {
-    const meeting = await this.prisma.meeting.findUnique({
-      where: { meetingCode: code }
-    });
-
-    if (!meeting) {
-      throw new NotFoundException('Meeting not found.');
-    }
-
+    const meeting = await this.prisma.meeting.findUnique({ where: { meetingCode: code } });
+    if (!meeting) throw new NotFoundException('Meeting not found.');
     return { valid: true, meetingId: meeting.id, title: meeting.title };
   }
 
-  async inviteUser(meetingCode: string, receiverId: string) {
-    const meeting = await this.prisma.meeting.findUnique({ where: { meetingCode } });
+  async inviteUsers(id: string, data: { receiverId?: string; emails?: string[] }) {
+    const meeting = await this.prisma.meeting.findUnique({ where: { id } });
     if (!meeting) throw new NotFoundException('Meeting not found.');
 
-    const receiver = await this.prisma.user.findUnique({ where: { id: receiverId } });
-    if (!receiver) {
-      throw new BadRequestException('User with this ID is not registered.');
+    if (data.emails) {
+      // Mock sending email invites
+      console.log(`Sending email invitations for meeting ${meeting.id} to: ${data.emails.join(', ')}`);
     }
 
-    const invitation = await this.prisma.meetingInvitation.create({
-      data: {
-        meetingId: meeting.id,
-        senderId: meeting.hostId,
-        receiverId: receiver.id,
-      }
-    });
-
-    // Notify the receiver in real-time
-    this.meetingGateway.server.emit(`invite-received-${receiver.id}`, {
-      invitationId: invitation.id,
-      meetingCode: meeting.meetingCode,
-      title: meeting.title,
-    });
-
-    return { success: true, message: 'Invitation sent.' };
+    return { success: true, message: 'Invitations sent.' };
   }
 
   async getMeetingSummary(code: string) {

@@ -125,3 +125,111 @@
   margin-bottom: 16px;
   color: #444;
 }
+
+.filter-chips {
+  display: flex;
+  gap: 12px;
+  margin-top: 24px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+}
+
+.filter-chip {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #a0a0b0;
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.filter-chip:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.filter-chip.active {
+  background: rgba(110, 86, 255, 0.2);
+  border-color: #6E56FF;
+  color: #fff;
+}
+
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+}
+
+.meetings-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 0.9rem;
+}
+
+.meetings-table th {
+  padding: 16px;
+  color: #a0a0b0;
+  font-weight: 500;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  white-space: nowrap;
+}
+
+.meetings-table td {
+  padding: 16px;
+  color: #d0d0d0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.meetings-table tbody tr {
+  transition: background 0.2s;
+  cursor: pointer;
+}
+
+.meetings-table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.font-medium {
+  font-weight: 500;
+}
+.text-white {
+  color: #fff !important;
+}
+
+.status-chip {
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.status-chip.scheduled {
+  background: rgba(59, 130, 246, 0.2);
+  color: #60A5FA;
+}
+
+.status-chip.live {
+  background: rgba(16, 185, 129, 0.2);
+  color: #34D399;
+}
+
+.status-chip.completed {
+  background: rgba(139, 92, 246, 0.2);
+  color: #A78BFA;
+}
+
+.status-chip.cancelled {
+  background: rgba(239, 68, 68, 0.2);
+  color: #F87171;
+}

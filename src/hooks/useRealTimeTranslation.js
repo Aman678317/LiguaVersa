@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { VAD } from '../utils/VAD';
 import { CaptionSynchronizer } from '../utils/CaptionSynchronizer';
+import { AudioStreamBuilder } from '../utils/AudioStreamBuilder';
 
 export const useRealTimeTranslation = (socket, roomId, userId, sourceLang, isEnabled) => {
   const [captions, setCaptions] = useState([]);
@@ -13,6 +14,7 @@ export const useRealTimeTranslation = (socket, roomId, userId, sourceLang, isEna
   const sequenceIdRef = useRef(0);
   const vadRef = useRef(null);
   const synchronizerRef = useRef(null);
+  const streamBuildersRef = useRef({}); // targetSocketId -> AudioStreamBuilder
 
   // Initialize Audio Playback Queue
   useEffect(() => {
@@ -59,59 +61,36 @@ export const useRealTimeTranslation = (socket, roomId, userId, sourceLang, isEna
     };
 
     const handleAudioOut = async (data) => {
-      if (!audioContextRef.current || data.senderId === userId) return;
+      if (!audioContextRef.current) return;
       
       try {
         const rawAudio = data.audioData.data || data.audioData;
-        
-        // Fallback to Web Speech API if backend returned an empty/0-byte buffer (e.g. missing TTS API keys)
-        if (!rawAudio || rawAudio.length === 0) {
-          if (data.translatedText && window.speechSynthesis) {
-            const utterance = new SpeechSynthesisUtterance(data.translatedText);
+        if (!rawAudio || rawAudio.length === 0) return;
+
+        // If we are the sender, we need to build the WebRTC track
+        if (data.senderId === userId) {
+          const targetSocketId = data.targetSocketId;
+          
+          if (!streamBuildersRef.current[targetSocketId]) {
+            const builder = new AudioStreamBuilder(audioContextRef.current);
+            streamBuildersRef.current[targetSocketId] = builder;
             
-            const langMap = { 'English': 'en-US', 'Spanish': 'es-ES', 'French': 'fr-FR', 'German': 'de-DE', 'Chinese': 'zh-CN', 'Japanese': 'ja-JP', 'Hindi': 'hi-IN', 'Marathi': 'mr-IN' };
-            utterance.lang = langMap[data.targetLang] || 'en-US';
-            
-            window.speechSynthesis.speak(utterance);
-            
-            if (synchronizerRef.current) {
-              synchronizerRef.current.syncAndDisplay(data.sequenceId);
-            }
-            
-            const estDuration = Math.max(2, (data.translatedText.split(' ').length / 150) * 60);
-            window.dispatchEvent(new CustomEvent('translation:playing', { detail: { duration: estDuration } }));
+            // Notify MeetingRoom that a new translated track is ready for this peer
+            const stream = builder.getStream();
+            const track = stream.getAudioTracks()[0];
+            window.dispatchEvent(new CustomEvent('translation:track-ready', { 
+              detail: { targetSocketId, track, stream } 
+            }));
           }
-          return;
-        }
+          
+          const builder = streamBuildersRef.current[targetSocketId];
+          await builder.addAudioChunk(rawAudio);
 
-        const audioData = new Uint8Array(rawAudio).buffer;
-        const audioBuffer = await audioContextRef.current.decodeAudioData(audioData);
-        
-        const source = audioContextRef.current.createBufferSource();
-        source.buffer = audioBuffer;
-        source.connect(audioContextRef.current.destination);
-
-        const currentTime = audioContextRef.current.currentTime;
-        if (nextPlayTimeRef.current < currentTime) {
-          nextPlayTimeRef.current = currentTime + 0.1; // small buffer
-        }
-
-        source.start(nextPlayTimeRef.current);
-        
-        // Trigger synchronized caption display when audio starts playing
-        // Timeout based on difference between now and nextPlayTime
-        const delayMs = Math.max(0, (nextPlayTimeRef.current - currentTime) * 1000);
-        setTimeout(() => {
+          // Trigger synchronized caption display
           if (synchronizerRef.current) {
             synchronizerRef.current.syncAndDisplay(data.sequenceId);
           }
-        }, delayMs);
-
-        nextPlayTimeRef.current += audioBuffer.duration;
-
-        // Note: Ducking of WebRTC audio happens in MeetingRoom.jsx via AudioMixer
-        // emit custom event so the UI knows translated audio is playing
-        window.dispatchEvent(new CustomEvent('translation:playing', { detail: { duration: audioBuffer.duration } }));
+        }
       } catch (e) {
         console.error("Audio playback error:", e);
       }

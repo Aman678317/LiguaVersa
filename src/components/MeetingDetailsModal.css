@@ -1,0 +1,138 @@
+.meeting-details-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.meeting-details-modal {
+  background: rgba(20, 20, 30, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+  border-radius: 16px;
+  width: 90%;
+  max-width: 450px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  color: #fff;
+  position: relative;
+}
+
+.meeting-details-header {
+  padding: 24px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  background: linear-gradient(135deg, rgba(110, 86, 255, 0.1), rgba(0, 255, 163, 0.05));
+}
+
+.meeting-details-header h2 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #fff;
+  margin-bottom: 8px;
+}
+
+.meeting-badge {
+  background: rgba(0, 255, 163, 0.2);
+  color: #00FFA3;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  display: inline-block;
+}
+
+.meeting-details-body {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.detail-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.95rem;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.detail-icon {
+  color: #6E56FF;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+}
+
+.meeting-details-footer {
+  padding: 20px 24px;
+  background: rgba(0, 0, 0, 0.3);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.btn-start {
+  grid-column: span 2;
+  background: linear-gradient(135deg, #6E56FF, #00FFA3);
+  border: none;
+  color: #111;
+  padding: 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.2s;
+}
+
+.btn-start:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(110, 86, 255, 0.4);
+}
+
+.btn-action {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #fff;
+  padding: 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.2s;
+}
+
+.btn-action:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.btn-delete {
+  color: #ff4444;
+  background: rgba(255, 68, 68, 0.1);
+  border-color: rgba(255, 68, 68, 0.2);
+}
+
+.btn-delete:hover {
+  background: rgba(255, 68, 68, 0.2);
+}

@@ -54,7 +54,8 @@ const MeetingRoom = () => {
   const [sourceLang, setSourceLang] = useState(user?.settings?.speechLanguage || 'English');
   const [translationEnabled, setTranslationEnabled] = useState(user?.settings?.autoStartTranslation || false);
   const [targetVoice, setTargetVoice] = useState('alloy');
-  const [isCaptionSettingsOpen, setIsCaptionSettingsOpen] = useState(false);
+  const [captionsEnabled, setCaptionsEnabled] = useState(true);
+  const [summaryEnabled, setSummaryEnabled] = useState(true);
   const [captionSettings, setCaptionSettings] = useState({
     fontSize: user?.settings?.captionFontSize || 'medium',
     position: user?.settings?.captionPosition || 'bottom',
@@ -96,7 +97,33 @@ const MeetingRoom = () => {
     }
   }, [audioContext]);
 
-  // Handle Ducking when translated audio plays
+  // Listen for new translated tracks to send over WebRTC
+  useEffect(() => {
+    const handleTranslatedTrack = (e) => {
+      const { targetSocketId, track, stream } = e.detail;
+      
+      const peerItem = peersRef.current.find(p => p.peerID === targetSocketId);
+      if (peerItem) {
+        // Find the original audio track to replace
+        const originalAudioTrack = streamRef.current?.getAudioTracks()[0];
+        const peer = peerItem.peer;
+        
+        if (originalAudioTrack && track) {
+          try {
+            // Replace the original audio track with the translated track for this specific peer
+            peer.replaceTrack(originalAudioTrack, track, streamRef.current);
+            console.log(`Replaced audio track for peer ${targetSocketId} with translated track`);
+          } catch (err) {
+            console.error("Failed to replace track:", err);
+          }
+        }
+      }
+    };
+    window.addEventListener('translation:track-ready', handleTranslatedTrack);
+    return () => window.removeEventListener('translation:track-ready', handleTranslatedTrack);
+  }, []);
+
+  // Handle Ducking when translated audio plays (Now obsolete since it's remote, but kept for safety)
   useEffect(() => {
     const handleTranslationPlaying = (e) => {
       if (audioMixerRef.current) {
@@ -397,6 +424,21 @@ const MeetingRoom = () => {
       startRecording(streamRef.current);
     } else {
       stopRecording();
+      // If translation stops, restore original track for all peers
+      if (streamRef.current) {
+        const originalAudioTrack = streamRef.current.getAudioTracks()[0];
+        peersRef.current.forEach(item => {
+          const senders = item.peer._pc.getSenders();
+          const audioSender = senders.find(s => s.track && s.track.kind === 'audio');
+          if (audioSender && audioSender.track !== originalAudioTrack) {
+            try {
+              item.peer.replaceTrack(audioSender.track, originalAudioTrack, streamRef.current);
+            } catch (e) {
+               console.error("Error restoring original track", e);
+            }
+          }
+        });
+      }
     }
   }, [isMuted, translationEnabled, sourceLang, startRecording, stopRecording]);
 
@@ -466,6 +508,12 @@ const MeetingRoom = () => {
         latency={latency}
         isTranslating={isTranslating}
         onOpenCaptionSettings={() => setIsCaptionSettingsOpen(true)}
+        captionsEnabled={captionsEnabled}
+        onToggleCaptions={() => setCaptionsEnabled(!captionsEnabled)}
+        summaryEnabled={summaryEnabled}
+        onToggleSummary={() => setSummaryEnabled(!summaryEnabled)}
+        isRecording={isRecording}
+        onToggleRecording={() => isRecording ? handleStopRecording() : handleStartRecording()}
       />
       
       <div style={{ position: 'absolute', top: 20, left: 20, zIndex: 100, background: 'rgba(0,0,0,0.5)', padding: '8px 12px', borderRadius: '12px', color: backendStatus === 'Connected to Backend' ? '#00FFA3' : '#FF4444', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -508,7 +556,7 @@ const MeetingRoom = () => {
           {/* WebRTC Video component handles audio context ducking globally */}
           <VideoGrid participants={participants} translationEnabled={translationEnabled} />
           
-          <LiveCaptions captions={captions} isEnabled={translationEnabled} settings={captionSettings} />
+          <LiveCaptions captions={captions} isEnabled={captionsEnabled} settings={captionSettings} />
           
           <CaptionSettings 
             isOpen={isCaptionSettingsOpen} 

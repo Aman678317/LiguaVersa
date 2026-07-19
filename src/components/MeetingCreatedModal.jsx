@@ -11,9 +11,9 @@ const MeetingCreatedModal = ({ isOpen, meetingCode, onClose }) => {
 
   if (!isOpen) return null;
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(meetingCode);
-    alert('Meeting Code copied to clipboard!');
+  const handleCopy = (text, label) => {
+    navigator.clipboard.writeText(text);
+    alert(`${label} copied to clipboard!`);
   };
 
   const handleInvite = async (e) => {
@@ -74,14 +74,42 @@ const MeetingCreatedModal = ({ isOpen, meetingCode, onClose }) => {
               Share this meeting code with others you want in the meeting.
             </p>
 
-            <div style={{ 
-              background: 'rgba(255,255,255,0.05)', padding: '15px', borderRadius: '8px', 
-              display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '25px'
-            }}>
-              <span style={{ fontSize: '1.2rem', letterSpacing: '2px', fontWeight: 'bold' }}>{meetingCode}</span>
-              <button onClick={handleCopy} style={{ background: 'none', border: 'none', color: '#00FFA3', cursor: 'pointer' }}>
-                <Copy size={20} />
-              </button>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', marginBottom: '25px' }}>
+              {/* URL Link */}
+              <div style={{ background: 'rgba(255,255,255,0.05)', padding: '12px 15px', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', overflow: 'hidden' }}>
+                  <span style={{ fontSize: '0.75rem', color: '#888', textTransform: 'uppercase', letterSpacing: '1px' }}>Meeting Link</span>
+                  <span style={{ fontSize: '0.9rem', color: '#6E56FF', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    https://linguaverse.ai/meet/{meetingCode}
+                  </span>
+                </div>
+                <button onClick={() => handleCopy(`https://linguaverse.ai/meet/${meetingCode}`, 'Meeting Link')} style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', padding: '4px' }}>
+                  <Copy size={18} />
+                </button>
+              </div>
+
+              {/* Meeting ID */}
+              <div style={{ background: 'rgba(255,255,255,0.05)', padding: '12px 15px', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <span style={{ fontSize: '0.75rem', color: '#888', textTransform: 'uppercase', letterSpacing: '1px' }}>Meeting ID</span>
+                  <span style={{ fontSize: '1.1rem', letterSpacing: '2px', fontWeight: 'bold' }}>
+                    {meetingCode.replace(/(.{4})/g, '$1 ').trim()}
+                  </span>
+                </div>
+                <button onClick={() => handleCopy(meetingCode, 'Meeting ID')} style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', padding: '4px' }}>
+                  <Copy size={18} />
+                </button>
+              </div>
+
+              {/* Password */}
+              <div style={{ background: 'rgba(255,255,255,0.05)', padding: '12px 15px', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <span style={{ fontSize: '0.75rem', color: '#888', textTransform: 'uppercase', letterSpacing: '1px' }}>Password</span>
+                  <span style={{ fontSize: '1.1rem', letterSpacing: '2px', fontWeight: 'bold' }}>
+                    ******
+                  </span>
+                </div>
+              </div>
             </div>
 
             <form onSubmit={handleInvite} style={{ marginBottom: '25px' }}>
