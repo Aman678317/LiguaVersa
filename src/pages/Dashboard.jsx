@@ -108,7 +108,7 @@ const Dashboard = () => {
   const handleCreateMeeting = async () => {
     setIsCreating(true);
     try {
-      const response = await fetch(`${BACKEND_URL}/meetings/create`, {
+      const response = await fetch(`${BACKEND_URL}/meetings`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -117,8 +117,9 @@ const Dashboard = () => {
         body: JSON.stringify({ title: 'Instant Meeting' })
       });
       const data = await response.json();
-      if (data.meetingCode) {
-        setCreatedMeetingCode(data.meetingCode);
+      const code = data.meetingCode || data.meeting?.meetingCode;
+      if (code) {
+        setCreatedMeetingCode(code);
       }
     } catch (err) {
       console.error('Failed to create meeting', err);
@@ -131,7 +132,7 @@ const Dashboard = () => {
   const handleCallContact = async (contactId) => {
     setIsCreating(true);
     try {
-      const response = await fetch(`${BACKEND_URL}/meetings/create`, {
+      const response = await fetch(`${BACKEND_URL}/meetings`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -140,19 +141,20 @@ const Dashboard = () => {
         body: JSON.stringify({ title: 'Instant Meeting' })
       });
       const data = await response.json();
-      if (data.meetingCode) {
-        await fetch(`${BACKEND_URL}/meetings/invite`, {
+      const code = data.meetingCode || data.meeting?.meetingCode;
+      const id = data.meeting?.id;
+      if (code && id) {
+        await fetch(`${BACKEND_URL}/meetings/${id}/invite`, {
           method: 'POST',
           headers: { 
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}` 
           },
           body: JSON.stringify({ 
-            meetingCode: data.meetingCode, 
             receiverId: contactId 
           })
         });
-        setCreatedMeetingCode(data.meetingCode);
+        setCreatedMeetingCode(code);
       }
     } catch (err) {
       console.error('Failed to call contact', err);
