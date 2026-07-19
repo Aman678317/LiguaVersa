@@ -31,6 +31,7 @@ const VideoTile = ({ participant, translationEnabled }) => {
           autoPlay 
           playsInline 
           muted={participant.isLocal || translationEnabled}
+          onLoadedMetadata={() => videoRef.current?.play().catch(e => console.log('Autoplay prevented:', e))}
         />
       )}
 

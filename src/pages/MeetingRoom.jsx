@@ -3,8 +3,9 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { io } from 'socket.io-client';
 import Peer from 'simple-peer';
 import { Buffer } from 'buffer';
+import process from 'process';
 globalThis.Buffer = Buffer; // Polyfill for simple-peer
-
+globalThis.process = process;
 import { useAuth } from '../context/AuthContext';
 import VideoGrid from '../components/meeting/VideoGrid';
 import ControlBar from '../components/meeting/ControlBar';
@@ -161,8 +162,13 @@ const MeetingRoom = () => {
         });
 
         socketRef.current.on('offer', (data) => {
-          const peer = addPeer(data.offer, data.callerId, stream);
-          peersRef.current.push({ peerID: data.callerId, peer });
+          let item = peersRef.current.find(p => p.peerID === data.callerId);
+          if (item) {
+            item.peer.signal(data.offer);
+          } else {
+            const peer = addPeer(data.offer, data.callerId, stream);
+            peersRef.current.push({ peerID: data.callerId, peer });
+          }
         });
 
         socketRef.current.on('answer', (data) => {
@@ -226,7 +232,7 @@ const MeetingRoom = () => {
   function createPeer(userToSignal, callerID, stream) {
     const peer = new Peer({
       initiator: true,
-      trickle: false,
+      trickle: true,
       stream,
       config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] }
     });
@@ -258,7 +264,7 @@ const MeetingRoom = () => {
   function addPeer(incomingSignal, callerID, stream) {
     const peer = new Peer({
       initiator: false,
-      trickle: false,
+      trickle: true,
       stream,
       config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] }
     });
