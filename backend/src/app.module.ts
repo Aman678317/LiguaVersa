@@ -9,9 +9,27 @@ import { HistoryModule } from './history/history.module';
 import { ChatModule } from './chat/chat.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { AdminModule } from './admin/admin.module';
+import { HealthModule } from './health/health.module';
+import { ThrottlerModule } from '@nestjs/throttler';
 
 @Module({
-  imports: [PrismaModule, TranslationModule, MeetingModule, UserModule, ContactModule, AuthModule, HistoryModule, ChatModule, AnalyticsModule, AdminModule],
+  imports: [
+    ThrottlerModule.forRoot([{
+      ttl: 60000,
+      limit: 100, // 100 requests per minute
+    }]),
+    PrismaModule, 
+    TranslationModule, 
+    MeetingModule, 
+    UserModule, 
+    ContactModule, 
+    AuthModule, 
+    HistoryModule, 
+    ChatModule, 
+    AnalyticsModule, 
+    AdminModule,
+    HealthModule
+  ],
   controllers: [],
   providers: [],
 })
