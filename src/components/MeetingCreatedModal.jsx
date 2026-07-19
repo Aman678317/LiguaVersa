@@ -80,10 +80,10 @@ const MeetingCreatedModal = ({ isOpen, meetingCode, onClose }) => {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', overflow: 'hidden' }}>
                   <span style={{ fontSize: '0.75rem', color: '#888', textTransform: 'uppercase', letterSpacing: '1px' }}>Meeting Link</span>
                   <span style={{ fontSize: '0.9rem', color: '#6E56FF', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    https://linguaverse.ai/meet/{meetingCode}
+                    {window.location.origin}/meet/{meetingCode}
                   </span>
                 </div>
-                <button onClick={() => handleCopy(`https://linguaverse.ai/meet/${meetingCode}`, 'Meeting Link')} style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', padding: '4px' }}>
+                <button onClick={() => handleCopy(`${window.location.origin}/meet/${meetingCode}`, 'Meeting Link')} style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', padding: '4px' }}>
                   <Copy size={18} />
                 </button>
               </div>
@@ -144,7 +144,7 @@ const MeetingCreatedModal = ({ isOpen, meetingCode, onClose }) => {
               <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem', color: '#ddd' }}>Share via Apps</label>
               <div style={{ display: 'flex', gap: '10px' }}>
                 <a 
-                  href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`Join my LinguaVerse meeting! Link: https://linguaverse.ai/meet/${meetingCode} Code: ${meetingCode}`)}`}
+                  href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`Join my LinguaVerse meeting! Link: ${window.location.origin}/meet/${meetingCode} Code: ${meetingCode}`)}`}
                   target="_blank" rel="noopener noreferrer"
                   style={{
                     flex: 1, padding: '10px', background: '#25D366', color: '#fff', 
@@ -154,7 +154,7 @@ const MeetingCreatedModal = ({ isOpen, meetingCode, onClose }) => {
                   WhatsApp
                 </a>
                 <a 
-                  href={`https://t.me/share/url?url=${encodeURIComponent(`https://linguaverse.ai/meet/${meetingCode}`)}&text=${encodeURIComponent(`Join my LinguaVerse meeting! Code: ${meetingCode}`)}`}
+                  href={`https://t.me/share/url?url=${encodeURIComponent(`${window.location.origin}/meet/${meetingCode}`)}&text=${encodeURIComponent(`Join my LinguaVerse meeting! Code: ${meetingCode}`)}`}
                   target="_blank" rel="noopener noreferrer"
                   style={{
                     flex: 1, padding: '10px', background: '#0088cc', color: '#fff', 
