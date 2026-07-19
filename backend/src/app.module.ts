@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AppController } from './app.controller';
 import { TranslationModule } from './translation/translation.module';
 import { MeetingModule } from './meeting/meeting.module';
 import { PrismaModule } from './prisma/prisma.module';
@@ -30,7 +31,7 @@ import { ThrottlerModule } from '@nestjs/throttler';
     AdminModule,
     HealthModule
   ],
-  controllers: [],
+  controllers: [AppController],
   providers: [],
 })
 export class AppModule {}
