@@ -470,8 +470,20 @@ const MeetingRoom = () => {
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ meetingCode: id, duration })
       });
+      
+      if (recordingManagerRef.current && isRecording) {
+        recordingManagerRef.current.stopRecording();
+        await recordingManagerRef.current.finalizeRecording();
+      } else {
+        // Force finalize to trigger summary generation even if not recorded
+        await fetch(`${BACKEND_URL}/recordings/finalize`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({ meetingId: id })
+        });
+      }
     } catch (e) {
-      console.error('Failed to save history', e);
+      console.error('Failed to save history or finalize', e);
     }
     navigate(`/summary/${id}`);
   };

@@ -78,6 +78,12 @@ export class TranslationService {
         where: { meetingId },
         orderBy: { createdAt: 'asc' }
       });
+
+      const speechHistories = await this.prisma.speechHistory.findMany({
+        where: { meetingId },
+        include: { participant: { include: { user: true } } },
+        orderBy: { createdAt: 'asc' }
+      });
       
       const userIds = [...new Set(messages.map(m => m.senderId))];
       const users = await this.prisma.user.findMany({
@@ -86,9 +92,15 @@ export class TranslationService {
       });
       const userMap = new Map(users.map(u => [u.id, u.email]));
       
-      const transcript = messages.map(m => `${userMap.get(m.senderId) || 'User'}: ${m.content}`).join('\n');
+      const chatTranscript = messages.map(m => `${userMap.get(m.senderId) || 'User'} (Chat): ${m.content}`).join('\n');
+      const speechTranscript = speechHistories.map(s => {
+        const userEmail = s.participant?.user?.email || 'Unknown User';
+        return `${userEmail} (Voice): ${s.transcription}`;
+      }).join('\n');
+
+      const fullTranscript = `--- Chat Messages ---\n${chatTranscript}\n\n--- Spoken Audio ---\n${speechTranscript}`;
       
-      const prompt = `Analyze the following meeting transcript and provide a JSON response with exactly these keys: "summary" (a short paragraph), "keyPoints" (array of strings), "actionItems" (array of strings), and "sentiment" (a string).\n\nTranscript:\n${transcript || 'No messages were sent in this meeting.'}`;
+      const prompt = `Analyze the following meeting transcript and provide a JSON response with exactly these keys: "summary" (a short paragraph), "keyPoints" (array of strings), "actionItems" (array of strings), and "sentiment" (a string).\n\nTranscript:\n${fullTranscript || 'No messages or speech were recorded in this meeting.'}`;
       
       const response = await this.openai.chat.completions.create({
         model: this.defaultModel,
@@ -97,10 +109,79 @@ export class TranslationService {
       });
 
       const text = response.choices[0]?.message?.content || '{}';
-      return JSON.parse(text);
+      
+      const parsedJson = JSON.parse(text);
+
+      // Save summary to database
+      await this.prisma.meetingSummary.create({
+        data: {
+          meetingId,
+          summary: parsedJson.summary,
+          keyPoints: parsedJson.keyPoints,
+          actionItems: parsedJson.actionItems
+        }
+      });
+
+      return parsedJson;
     } catch (error) {
       console.error("OpenRouter Summary Error:", error);
       return { error: "Failed to generate summary" };
+    }
+  }
+
+  async aiChatQuery(meetingId: string, question: string): Promise<string> {
+    if (!this.openai) {
+      return "Mock AI response. Please configure OpenRouter API Key.";
+    }
+
+    try {
+      const messages = await this.prisma.message.findMany({
+        where: { meetingId },
+        orderBy: { createdAt: 'asc' }
+      });
+
+      const speechHistories = await this.prisma.speechHistory.findMany({
+        where: { meetingId },
+        include: { participant: { include: { user: true } } },
+        orderBy: { createdAt: 'asc' }
+      });
+
+      const meetingSummary = await this.prisma.meetingSummary.findFirst({
+        where: { meetingId },
+        orderBy: { createdAt: 'desc' }
+      });
+      
+      const userIds = [...new Set(messages.map(m => m.senderId))];
+      const users = await this.prisma.user.findMany({
+        where: { id: { in: userIds } },
+        select: { id: true, email: true }
+      });
+      const userMap = new Map(users.map(u => [u.id, u.email]));
+      
+      const chatTranscript = messages.map(m => `${userMap.get(m.senderId) || 'User'} (Chat): ${m.content}`).join('\n');
+      const speechTranscript = speechHistories.map(s => {
+        const userEmail = s.participant?.user?.email || 'Unknown User';
+        return `${userEmail} (Voice): ${s.transcription}`;
+      }).join('\n');
+
+      const fullTranscript = `--- Chat Messages ---\n${chatTranscript}\n\n--- Spoken Audio ---\n${speechTranscript}`;
+      
+      let contextStr = `Meeting Transcript:\n${fullTranscript}\n\n`;
+      if (meetingSummary) {
+        contextStr += `Meeting Summary:\n${meetingSummary.summary}\n\nKey Points:\n${JSON.stringify(meetingSummary.keyPoints)}\n\nAction Items:\n${JSON.stringify(meetingSummary.actionItems)}\n\n`;
+      }
+
+      const prompt = `You are a helpful AI assistant tasked with answering questions about a specific meeting. Use the provided meeting transcript and summary to answer the user's question accurately and concisely. If the answer cannot be found in the provided context, state that you don't know based on the meeting records.\n\nContext:\n${contextStr}\n\nUser Question: ${question}\n\nAnswer:`;
+      
+      const response = await this.openai.chat.completions.create({
+        model: this.defaultModel,
+        messages: [{ role: 'user', content: prompt }]
+      });
+
+      return response.choices[0]?.message?.content || "I couldn't generate an answer.";
+    } catch (error) {
+      console.error("OpenRouter Chat Query Error:", error);
+      return "An error occurred while answering your question.";
     }
   }
 }

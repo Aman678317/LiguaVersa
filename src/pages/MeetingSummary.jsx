@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import './Dashboard.css';
 import { useAuth } from '../context/AuthContext';
 import { BACKEND_URL } from '../config';
+import AIChatBot from '../components/AIChatBot';
 
 const MeetingSummary = () => {
   const { id } = useParams();
@@ -62,6 +63,8 @@ const MeetingSummary = () => {
     show: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 100 } }
   };
 
+  const [activeTab, setActiveTab] = useState('summary');
+
   return (
     <div className="dashboard-container" style={{ minHeight: '100vh', background: 'radial-gradient(circle at top right, #1a1a2e, #0f0f1a)', color: 'white' }}>
       <div className="dash-main" style={{ padding: '40px', maxWidth: '1200px', margin: '0 auto' }}>
@@ -95,76 +98,97 @@ const MeetingSummary = () => {
           </div>
         </motion.div>
 
+        <div style={{ display: 'flex', gap: '16px', marginBottom: '30px', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '16px' }}>
+          <button onClick={() => setActiveTab('summary')} style={{ background: activeTab === 'summary' ? 'rgba(255,255,255,0.1)' : 'transparent', border: 'none', color: activeTab === 'summary' ? '#00FFA3' : 'rgba(255,255,255,0.6)', padding: '10px 20px', borderRadius: '12px', cursor: 'pointer', fontSize: '1.1rem', fontWeight: '600', transition: 'all 0.2s' }}>
+            AI Summary
+          </button>
+          <button onClick={() => setActiveTab('transcript')} style={{ background: activeTab === 'transcript' ? 'rgba(255,255,255,0.1)' : 'transparent', border: 'none', color: activeTab === 'transcript' ? '#3b82f6' : 'rgba(255,255,255,0.6)', padding: '10px 20px', borderRadius: '12px', cursor: 'pointer', fontSize: '1.1rem', fontWeight: '600', transition: 'all 0.2s' }}>
+            Transcript & Chat
+          </button>
+          <button onClick={() => setActiveTab('video')} style={{ background: activeTab === 'video' ? 'rgba(255,255,255,0.1)' : 'transparent', border: 'none', color: activeTab === 'video' ? '#ec4899' : 'rgba(255,255,255,0.6)', padding: '10px 20px', borderRadius: '12px', cursor: 'pointer', fontSize: '1.1rem', fontWeight: '600', transition: 'all 0.2s' }}>
+            Video Recording
+          </button>
+        </div>
+
         <motion.div variants={containerVariants} initial="hidden" animate="show" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '30px' }}>
           
           <div style={{ display: 'flex', flexDirection: 'column', gap: '30px' }}>
-            {/* AI Summary */}
-            <motion.div variants={itemVariants} className="glass-card" style={{ padding: '30px', borderRadius: '24px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)' }}>
-              <h3 style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '24px', fontSize: '1.4rem' }}><FileText color="#3b82f6" /> AI Generated Summary</h3>
-              <div style={{ background: 'rgba(0,0,0,0.3)', padding: '24px', borderRadius: '16px', lineHeight: '1.8', color: 'rgba(255,255,255,0.8)', fontSize: '1.05rem' }}>
-                {summaryJson.summary ? (
-                  <>
-                    <p style={{ color: '#00FFA3', fontWeight: '600', marginBottom: '10px' }}>Summary:</p>
-                    <p style={{ marginBottom: '20px' }}>{summaryJson.summary}</p>
-                    
-                    <p style={{ color: '#3b82f6', fontWeight: '600', marginBottom: '10px' }}>Key Points:</p>
-                    <ul style={{ marginBottom: '20px', paddingLeft: '20px' }}>
-                      {(summaryJson.keyPoints || []).map((item, idx) => (
-                        <li key={idx} style={{ marginBottom: '8px' }}>{item}</li>
-                      ))}
-                    </ul>
+            
+            {activeTab === 'summary' && (
+              <motion.div variants={itemVariants} className="glass-card" style={{ padding: '30px', borderRadius: '24px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)' }}>
+                <h3 style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '24px', fontSize: '1.4rem' }}><FileText color="#3b82f6" /> AI Generated Summary</h3>
+                <div style={{ background: 'rgba(0,0,0,0.3)', padding: '24px', borderRadius: '16px', lineHeight: '1.8', color: 'rgba(255,255,255,0.8)', fontSize: '1.05rem' }}>
+                  {summaryJson.summary ? (
+                    <>
+                      <p style={{ color: '#00FFA3', fontWeight: '600', marginBottom: '10px' }}>Summary:</p>
+                      <p style={{ marginBottom: '20px' }}>{summaryJson.summary}</p>
+                      
+                      <p style={{ color: '#3b82f6', fontWeight: '600', marginBottom: '10px' }}>Key Points:</p>
+                      <ul style={{ marginBottom: '20px', paddingLeft: '20px' }}>
+                        {(summaryJson.keyPoints || []).map((item, idx) => (
+                          <li key={idx} style={{ marginBottom: '8px' }}>{item}</li>
+                        ))}
+                      </ul>
 
-                    <p style={{ color: '#f59e0b', fontWeight: '600', marginBottom: '10px' }}>Action Items:</p>
-                    <ul style={{ paddingLeft: '20px' }}>
-                      {(summaryJson.actionItems || []).map((item, idx) => (
-                        <li key={idx} style={{ marginBottom: '8px' }}>{item}</li>
-                      ))}
-                    </ul>
-                  </>
-                ) : (
-                  <p style={{ opacity: 0.6 }}>AI Summary is being generated or no recording was saved.</p>
-                )}
-              </div>
-            </motion.div>
+                      <p style={{ color: '#f59e0b', fontWeight: '600', marginBottom: '10px' }}>Action Items:</p>
+                      <ul style={{ paddingLeft: '20px' }}>
+                        {(summaryJson.actionItems || []).map((item, idx) => (
+                          <li key={idx} style={{ marginBottom: '8px' }}>{item}</li>
+                        ))}
+                      </ul>
+                    </>
+                  ) : (
+                    <p style={{ opacity: 0.6 }}>AI Summary is being generated or no recording was saved.</p>
+                  )}
+                </div>
+              </motion.div>
+            )}
 
-            {/* Transcript (Script of video) */}
-            <motion.div variants={itemVariants} className="glass-card" style={{ padding: '30px', borderRadius: '24px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)' }}>
-              <h3 style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '24px', fontSize: '1.4rem' }}><MessageSquare color="#8b5cf6" /> Meeting Transcript</h3>
-              <div style={{ background: 'rgba(0,0,0,0.3)', padding: '24px', borderRadius: '16px', maxHeight: '400px', overflowY: 'auto' }}>
-                {speechHistories.length > 0 ? (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                    {speechHistories.map((speech) => {
-                      const speakerName = speech.participant?.user?.profile?.firstName || speech.participant?.user?.email || 'Unknown User';
-                      return (
-                        <div key={speech.id} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                          <span style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.5)', fontWeight: '600' }}>{speakerName}</span>
-                          <div style={{ background: 'rgba(255,255,255,0.05)', padding: '12px 16px', borderRadius: '12px', borderTopLeftRadius: 0, color: 'rgba(255,255,255,0.9)' }}>
-                            {speech.transcription}
+            {activeTab === 'transcript' && (
+              <motion.div variants={itemVariants} className="glass-card" style={{ padding: '30px', borderRadius: '24px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)' }}>
+                <h3 style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '24px', fontSize: '1.4rem' }}><MessageSquare color="#8b5cf6" /> Meeting Transcript</h3>
+                <div style={{ background: 'rgba(0,0,0,0.3)', padding: '24px', borderRadius: '16px', maxHeight: '500px', overflowY: 'auto' }}>
+                  {speechHistories.length > 0 ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                      {speechHistories.map((speech) => {
+                        const speakerName = speech.participant?.user?.profile?.firstName || speech.participant?.user?.email || 'Unknown User';
+                        return (
+                          <div key={speech.id} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            <span style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.5)', fontWeight: '600' }}>{speakerName}</span>
+                            <div style={{ background: 'rgba(255,255,255,0.05)', padding: '12px 16px', borderRadius: '12px', borderTopLeftRadius: 0, color: 'rgba(255,255,255,0.9)' }}>
+                              {speech.transcription}
+                            </div>
                           </div>
-                        </div>
-                      )
-                    })}
+                        )
+                      })}
+                    </div>
+                  ) : (
+                    <p style={{ color: 'rgba(255,255,255,0.5)', margin: 0 }}>No transcript data available.</p>
+                  )}
+                </div>
+              </motion.div>
+            )}
+
+            {activeTab === 'video' && (
+              <motion.div variants={itemVariants} className="glass-card" style={{ padding: '30px', borderRadius: '24px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)' }}>
+                <h3 style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '24px', fontSize: '1.4rem' }}><Play color="#ec4899" /> Video Recording</h3>
+                {latestRecording ? (
+                  <div style={{ width: '100%', borderRadius: '16px', overflow: 'hidden', boxShadow: '0 10px 30px rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)' }}>
+                    <video src={`${BACKEND_URL}${latestRecording.url}`} controls style={{ width: '100%', display: 'block' }} />
                   </div>
                 ) : (
-                  <p style={{ color: 'rgba(255,255,255,0.5)', margin: 0 }}>No transcript data available.</p>
+                  <div style={{ width: '100%', height: '160px', background: 'rgba(0,0,0,0.3)', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px dashed rgba(255,255,255,0.1)' }}>
+                    <p style={{ color: 'rgba(255,255,255,0.4)' }}>No recording available.</p>
+                  </div>
                 )}
-              </div>
-            </motion.div>
+              </motion.div>
+            )}
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '30px' }}>
-            {/* Recording Video */}
+            {/* AI Chat Bot */}
             <motion.div variants={itemVariants} className="glass-card" style={{ padding: '30px', borderRadius: '24px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)' }}>
-              <h3 style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '24px', fontSize: '1.4rem' }}><Play color="#ec4899" /> Video Recording</h3>
-              {latestRecording ? (
-                <div style={{ width: '100%', borderRadius: '16px', overflow: 'hidden', boxShadow: '0 10px 30px rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)' }}>
-                  <video src={`${BACKEND_URL}${latestRecording.url}`} controls style={{ width: '100%', display: 'block' }} />
-                </div>
-              ) : (
-                <div style={{ width: '100%', height: '160px', background: 'rgba(0,0,0,0.3)', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px dashed rgba(255,255,255,0.1)' }}>
-                  <p style={{ color: 'rgba(255,255,255,0.4)' }}>No recording available.</p>
-                </div>
-              )}
+              <AIChatBot meetingCode={id} token={token} />
             </motion.div>
 
             {/* Attendance */}

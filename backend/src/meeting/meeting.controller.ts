@@ -3,10 +3,15 @@ import { MeetingService } from './meeting.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { AccessToken } from 'livekit-server-sdk';
 
+import { TranslationService } from './translation.service';
+
 @Controller('meetings')
 @UseGuards(JwtAuthGuard)
 export class MeetingController {
-  constructor(private readonly meetingService: MeetingService) {}
+  constructor(
+    private readonly meetingService: MeetingService,
+    private readonly translationService: TranslationService
+  ) {}
 
   @Post()
   async createMeeting(@Request() req, @Body() data: any) {
@@ -52,6 +57,16 @@ export class MeetingController {
   @Get('summary/:code')
   async getSummary(@Param('code') code: string) {
     return this.meetingService.getMeetingSummary(code);
+  }
+
+  @Post('summary/:code/chat')
+  async chatWithSummary(@Param('code') code: string, @Body('question') question: string) {
+    const summaryData = await this.meetingService.getMeetingSummary(code);
+    if (!summaryData || !summaryData.meeting) {
+      return { answer: 'Meeting not found.' };
+    }
+    const answer = await this.translationService.aiChatQuery(summaryData.meeting.id, question);
+    return { answer };
   }
 
   @Get(':id/livekit/token')
