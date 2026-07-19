@@ -7,8 +7,11 @@ import { ContactModule } from './contact/contact.module';
 import { AuthModule } from './auth/auth.module';
 import { HistoryModule } from './history/history.module';
 import { ChatModule } from './chat/chat.module';
+import { AnalyticsModule } from './analytics/analytics.module';
+import { AdminModule } from './admin/admin.module';
+
 @Module({
-  imports: [PrismaModule, TranslationModule, MeetingModule, UserModule, ContactModule, AuthModule, HistoryModule, ChatModule],
+  imports: [PrismaModule, TranslationModule, MeetingModule, UserModule, ContactModule, AuthModule, HistoryModule, ChatModule, AnalyticsModule, AdminModule],
   controllers: [],
   providers: [],
 })

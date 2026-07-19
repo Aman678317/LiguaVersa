@@ -18,6 +18,11 @@ enum RoleType {
   GUEST
 }
 
+enum Role {
+  USER
+  ADMIN
+}
+
 enum MeetingStatus {
   SCHEDULED
   ONGOING
@@ -38,6 +43,8 @@ enum SubscriptionTier {
 model User {
   id              String    @id @default(uuid())
   email           String    @unique
+  password        String
+  role            Role      @default(USER)
   passwordHash    String?
   authProvider    String? // 'local', 'google', 'github', 'microsoft'
   isEmailVerified Boolean   @default(false)
@@ -82,7 +89,7 @@ model Profile {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
-model Role {
+model RoleDefinition {
   id          String    @id @default(uuid())
   name        String    @unique
   description String?
@@ -113,7 +120,7 @@ model UserRole {
   updatedAt DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  role RoleDefinition @relation(fields: [roleId], references: [id], onDelete: Cascade)
 
   @@unique([userId, roleId])
 }
@@ -125,8 +132,8 @@ model RolePermission {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
-  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  role       RoleDefinition @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission     @relation(fields: [permissionId], references: [id], onDelete: Cascade)
 
   @@unique([roleId, permissionId])
 }
@@ -444,7 +451,51 @@ model Setting {
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// Phase 8: Analytics & Metering
+
+model SystemMetric {
+  id          String   @id @default(uuid())
+  timestamp   DateTime @default(now())
+  cpuUsage    Float
+  memoryUsage Float
+  activeSockets Int
+  dbHealth    String   @default("ok") // ok, degraded, down
+  apiHealth   String   @default("ok")
+}
+
+model TranslationMetric {
+  id            String   @id @default(uuid())
+  timestamp     DateTime @default(now())
+  userId        String?
+  sourceLang    String
+  targetLang    String
+  latencyMs     Int
+  bytesProcessed Int
+  success       Boolean  @default(true)
+  type          String   @default("text") // text, voice, chat, caption
+}
+
+model MeetingMetric {
+  id               String   @id @default(uuid())
+  timestamp        DateTime @default(now())
+  meetingId        String
+  durationSeconds  Int
+  participants     Int
+  translationsMade Int
+  captionsMade     Int
+}
+
+model ErrorLog {
+  id          String   @id @default(uuid())
+  timestamp   DateTime @default(now())
+  service     String   // webrtc, translation, speech, db, socket
+  message     String
+  code        String?
+  stackTrace  String?
+  userId      String?
 }
 
 model ChatAnalytics {

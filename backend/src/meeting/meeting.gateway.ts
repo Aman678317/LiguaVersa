@@ -5,6 +5,8 @@ import { SpeechService } from './speech.service';
 import { TtsService } from './tts.service';
 import { ChatService } from '../chat/chat.service';
 import { CaptionService } from './caption.service';
+import { AnalyticsService } from '../analytics/analytics.service';
+import * as os from 'os';
 
 @WebSocketGateway({ cors: { origin: '*' }, maxHttpBufferSize: 1e8 })
 export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect {
@@ -14,15 +16,39 @@ export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect 
     private ttsService: TtsService,
     private chatService: ChatService,
     private captionService: CaptionService,
-  ) {}
+    private analyticsService: AnalyticsService,
+  ) {
+    setInterval(() => this.broadcastSystemHealth(), 5000);
+  }
 
   @WebSocketServer()
   server: Server;
 
   private connectedUsers = new Map<string, string>(); // userId -> socketId
   private socketSettings = new Map<string, any>(); // socketId -> settings object
+  private meetingStartTimes = new Map<string, number>(); // roomId -> startTime
   // Active translation sessions (mocking a pipeline manager)
   private activeStreams = new Map<string, { buffer: Buffer[], timer: NodeJS.Timeout }>(); 
+
+  private async broadcastSystemHealth() {
+    if (!this.server) return;
+    const cpuUsage = os.loadavg()[0]; // 1 minute load average
+    const memoryUsage = (os.totalmem() - os.freemem()) / os.totalmem() * 100;
+    
+    const health = {
+      cpuUsage,
+      memoryUsage,
+      activeSockets: this.server.engine.clientsCount,
+      dbHealth: 'ok',
+      apiHealth: 'ok'
+    };
+
+    // Log to DB via AnalyticsService
+    await this.analyticsService.logSystemHealth(health);
+
+    // Broadcast to admins (or all for now)
+    this.server.emit('server:health', health);
+  }
 
   handleConnection(client: Socket) {
     const userId = client.handshake.query.userId as string;
@@ -51,6 +77,32 @@ export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect 
   handleJoinRoom(@MessageBody() data: { roomId: string }, @ConnectedSocket() client: Socket) {
     client.join(data.roomId);
     client.to(data.roomId).emit('user-joined', { userId: client.id });
+    
+    if (!this.meetingStartTimes.has(data.roomId)) {
+      this.meetingStartTimes.set(data.roomId, Date.now());
+    }
+  }
+
+  @SubscribeMessage('leave-room')
+  async handleLeaveRoom(@MessageBody() data: { roomId: string }, @ConnectedSocket() client: Socket) {
+    client.leave(data.roomId);
+    client.to(data.roomId).emit('user-left', { userId: client.id });
+
+    const sockets = await this.server.in(data.roomId).fetchSockets();
+    if (sockets.length === 0) {
+      const startTime = this.meetingStartTimes.get(data.roomId);
+      if (startTime) {
+        const durationSeconds = Math.floor((Date.now() - startTime) / 1000);
+        await this.analyticsService.logMeeting({
+          meetingId: data.roomId,
+          durationSeconds,
+          participants: 2, // approximation
+          translationsMade: 0,
+          captionsMade: 0
+        });
+        this.meetingStartTimes.delete(data.roomId);
+      }
+    }
   }
 
   @SubscribeMessage('offer')
@@ -198,6 +250,7 @@ export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect 
     } catch (e) {
       console.error("Error processing voice message:", e);
       client.emit('chat:error', { message: 'Failed to process voice message.' });
+      this.analyticsService.logError({ service: 'speech', message: e.message });
     }
   }
 

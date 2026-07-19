@@ -1,13 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import OpenAI from 'openai';
 import { PrismaService } from '../prisma/prisma.service';
+import { AnalyticsService } from '../analytics/analytics.service';
 
 @Injectable()
 export class TranslationService {
   private openai: OpenAI | null = null;
   private readonly defaultModel = 'openai/gpt-4o-mini';
 
-  constructor(private prisma: PrismaService) {
+  constructor(private prisma: PrismaService, private analytics: AnalyticsService) {
     const apiKey = process.env.OPENROUTER_API_KEY || '';
     if (apiKey) {
       this.openai = new OpenAI({
@@ -20,24 +21,46 @@ export class TranslationService {
   }
 
   async translateText(text: string, sourceLang: string, targetLang: string): Promise<string> {
+    const startTime = Date.now();
+    let success = true;
+    let translated = text;
+
     if (!this.openai) {
-      return `[${targetLang.toUpperCase()}] ${text}`;
+      translated = `[${targetLang.toUpperCase()}] ${text}`;
+    } else {
+      try {
+        const response = await this.openai.chat.completions.create({
+          model: this.defaultModel,
+          messages: [
+            { role: 'system', content: `You are a real-time voice translator. Translate the following spoken text from ${sourceLang} to ${targetLang}. Preserve the original meaning, tone, emotion, and context perfectly. Respond ONLY with the translated text, no quotes or explanations.` },
+            { role: 'user', content: text }
+          ],
+          temperature: 0.3,
+        });
+        translated = response.choices[0]?.message?.content?.trim() || text;
+      } catch (error) {
+        console.error("OpenRouter Translation Error:", error);
+        success = false;
+        translated = `[Error] ${text}`;
+        this.analytics.logError({
+          service: 'translation',
+          message: error.message || 'Translation API failed',
+          code: error.status ? String(error.status) : 'UNKNOWN'
+        });
+      }
     }
 
-    try {
-      const response = await this.openai.chat.completions.create({
-        model: this.defaultModel,
-        messages: [
-          { role: 'system', content: `You are a real-time voice translator. Translate the following spoken text from ${sourceLang} to ${targetLang}. Preserve the original meaning, tone, emotion, and context perfectly. Respond ONLY with the translated text, no quotes or explanations.` },
-          { role: 'user', content: text }
-        ],
-        temperature: 0.3,
-      });
-      return response.choices[0]?.message?.content?.trim() || text;
-    } catch (error) {
-      console.error("OpenRouter Translation Error:", error);
-      return `[Error] ${text}`;
-    }
+    const latencyMs = Date.now() - startTime;
+    this.analytics.logTranslation({
+      sourceLang,
+      targetLang,
+      latencyMs,
+      bytesProcessed: Buffer.byteLength(text, 'utf8'),
+      success,
+      type: 'text' // default type, can be refined based on caller
+    });
+
+    return translated;
   }
 
   async generateMeetingSummary(meetingId: string): Promise<any> {
