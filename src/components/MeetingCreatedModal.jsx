@@ -140,6 +140,32 @@ const MeetingCreatedModal = ({ isOpen, meetingCode, onClose }) => {
               {inviteStatus && <div style={{ marginTop: '8px', fontSize: '0.8rem', color: inviteStatus.includes('sent') ? '#00FFA3' : '#FF4444' }}>{inviteStatus}</div>}
             </form>
 
+            <div style={{ marginBottom: '25px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem', color: '#ddd' }}>Share via Apps</label>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <a 
+                  href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`Join my LinguaVerse meeting! Link: https://linguaverse.ai/meet/${meetingCode} Code: ${meetingCode}`)}`}
+                  target="_blank" rel="noopener noreferrer"
+                  style={{
+                    flex: 1, padding: '10px', background: '#25D366', color: '#fff', 
+                    borderRadius: '8px', textAlign: 'center', textDecoration: 'none', fontWeight: 'bold', fontSize: '0.9rem'
+                  }}
+                >
+                  WhatsApp
+                </a>
+                <a 
+                  href={`https://t.me/share/url?url=${encodeURIComponent(`https://linguaverse.ai/meet/${meetingCode}`)}&text=${encodeURIComponent(`Join my LinguaVerse meeting! Code: ${meetingCode}`)}`}
+                  target="_blank" rel="noopener noreferrer"
+                  style={{
+                    flex: 1, padding: '10px', background: '#0088cc', color: '#fff', 
+                    borderRadius: '8px', textAlign: 'center', textDecoration: 'none', fontWeight: 'bold', fontSize: '0.9rem'
+                  }}
+                >
+                  Telegram
+                </a>
+              </div>
+            </div>
+
             <button 
               onClick={() => navigate(`/meet/${meetingCode}`)}
               style={{

@@ -541,6 +541,26 @@ const MeetingRoom = () => {
               >
                 Copy Invite Link
               </button>
+              <a 
+                href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`Join my LinguaVerse meeting! Link: ${window.location.href}`)}`}
+                target="_blank" rel="noopener noreferrer"
+                style={{
+                  background: '#25D366', color: 'white', padding: '6px 12px', borderRadius: '8px', 
+                  textDecoration: 'none', fontSize: '0.85rem', fontWeight: 'bold'
+                }}
+              >
+                WhatsApp
+              </a>
+              <a 
+                href={`https://t.me/share/url?url=${encodeURIComponent(window.location.href)}&text=${encodeURIComponent('Join my LinguaVerse meeting!')}`}
+                target="_blank" rel="noopener noreferrer"
+                style={{
+                  background: '#0088cc', color: 'white', padding: '6px 12px', borderRadius: '8px', 
+                  textDecoration: 'none', fontSize: '0.85rem', fontWeight: 'bold'
+                }}
+              >
+                Telegram
+              </a>
             </div>
             <div className="meeting-badges" style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
               <span style={{color: 'white', fontSize: '0.85rem'}}>My Language:</span>
