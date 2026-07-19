@@ -1,0 +1,39 @@
+services:
+  # 1. Node.js Backend Service
+  - type: web
+    name: lingua-versa-backend
+    env: node
+    region: frankfurt
+    plan: free
+    buildCommand: "cd backend && npm install && npx prisma generate && npx prisma db push && npm run build"
+    startCommand: "cd backend && npm run start:prod"
+    envVars:
+      - key: DATABASE_URL
+        sync: false # You will enter this on Render dashboard
+      - key: DIRECT_URL
+        sync: false # You will enter this on Render dashboard
+      - key: JWT_SECRET
+        generateValue: true # Render will generate a strong secret automatically
+      - key: GEMINI_API_KEY
+        sync: false # Enter your AI key on Render dashboard
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: FRONTEND_URL
+        value: "https://lingua-versa-frontend.onrender.com" # Auto-links to frontend
+
+  # 2. React (Vite) Frontend Static Site
+  - type: web
+    name: lingua-versa-frontend
+    env: static
+    region: frankfurt
+    plan: free
+    buildCommand: "npm install && npm run build"
+    staticPublishPath: "./dist"
+    envVars:
+      - key: VITE_BACKEND_URL
+        fromService:
+          type: web
+          name: lingua-versa-backend
+          envVarKey: RENDER_EXTERNAL_URL
