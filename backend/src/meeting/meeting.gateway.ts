@@ -357,6 +357,8 @@ export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect 
             senderId: data.senderId,
             sequenceId: data.sequenceId,
             audioData: audioBuffer,
+            translatedText: translatedText,
+            targetLang: targetLang,
           });
         }));
       }, 800);

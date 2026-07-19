@@ -1,44 +1,43 @@
 import { Injectable } from '@nestjs/common';
-import OpenAI, { toFile } from 'openai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 @Injectable()
 export class SpeechService {
-  private openai: OpenAI | null = null;
+  private genAI: GoogleGenerativeAI | null = null;
+  private readonly defaultModel = 'gemini-1.5-flash';
 
   constructor() {
-    const apiKey = process.env.OPENAI_API_KEY || '';
+    const apiKey = process.env.GEMINI_API_KEY || '';
     if (apiKey) {
-      this.openai = new OpenAI({ apiKey });
+      this.genAI = new GoogleGenerativeAI(apiKey);
     } else {
-      console.warn("OPENAI_API_KEY is missing. STT will use fallback/mock.");
+      console.warn("GEMINI_API_KEY is missing. STT will use fallback/mock.");
     }
   }
 
   async transcribeAudio(audioBuffer: Buffer, mimeType: string = 'audio/webm'): Promise<string> {
-    if (!this.openai) {
+    if (!this.genAI) {
       // Return a mock transcription for testing without API keys
       return "Mock transcription of audio chunk.";
     }
 
     try {
-      // OpenAI requires a file name with a known extension to determine the format
-      let extension = 'webm';
-      if (mimeType.includes('mp4')) extension = 'mp4';
-      if (mimeType.includes('wav')) extension = 'wav';
-      if (mimeType.includes('mpeg') || mimeType.includes('mp3')) extension = 'mp3';
-
-      const file = await toFile(audioBuffer, `speech.${extension}`, { type: mimeType });
-
-      const response = await this.openai.audio.transcriptions.create({
-        file: file,
-        model: 'whisper-1',
-        response_format: 'text',
-      });
-
-      return (response as any).trim();
+      const model = this.genAI.getGenerativeModel({ model: this.defaultModel });
+      const result = await model.generateContent([
+        {
+          inlineData: {
+            mimeType: mimeType,
+            data: audioBuffer.toString('base64'),
+          }
+        },
+        { text: "Transcribe the speech in this audio perfectly. Do not include any explanations, formatting, or quotes. Reply with ONLY the transcription." }
+      ]);
+      
+      const response = await result.response;
+      return response.text().trim();
     } catch (error) {
-      console.error('SpeechService STT Error:', error);
-      throw new Error('Failed to transcribe audio');
+      console.error('SpeechService STT Error (Gemini):', error);
+      throw new Error('Failed to transcribe audio using Gemini');
     }
   }
 }

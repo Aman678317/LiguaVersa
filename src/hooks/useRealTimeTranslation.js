@@ -62,7 +62,29 @@ export const useRealTimeTranslation = (socket, roomId, userId, sourceLang, isEna
       if (!audioContextRef.current || data.senderId === userId) return;
       
       try {
-        const audioData = new Uint8Array(data.audioData.data || data.audioData).buffer;
+        const rawAudio = data.audioData.data || data.audioData;
+        
+        // Fallback to Web Speech API if backend returned an empty/0-byte buffer (e.g. missing TTS API keys)
+        if (!rawAudio || rawAudio.length === 0) {
+          if (data.translatedText && window.speechSynthesis) {
+            const utterance = new SpeechSynthesisUtterance(data.translatedText);
+            
+            const langMap = { 'English': 'en-US', 'Spanish': 'es-ES', 'French': 'fr-FR', 'German': 'de-DE', 'Chinese': 'zh-CN', 'Japanese': 'ja-JP', 'Hindi': 'hi-IN', 'Marathi': 'mr-IN' };
+            utterance.lang = langMap[data.targetLang] || 'en-US';
+            
+            window.speechSynthesis.speak(utterance);
+            
+            if (synchronizerRef.current) {
+              synchronizerRef.current.syncAndDisplay(data.sequenceId);
+            }
+            
+            const estDuration = Math.max(2, (data.translatedText.split(' ').length / 150) * 60);
+            window.dispatchEvent(new CustomEvent('translation:playing', { detail: { duration: estDuration } }));
+          }
+          return;
+        }
+
+        const audioData = new Uint8Array(rawAudio).buffer;
         const audioBuffer = await audioContextRef.current.decodeAudioData(audioData);
         
         const source = audioContextRef.current.createBufferSource();
