@@ -1,6 +1,7 @@
 import { Controller, Post, Get, Put, Delete, Param, Body, UseGuards, Request } from '@nestjs/common';
 import { MeetingService } from './meeting.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { AccessToken } from 'livekit-server-sdk';
 
 @Controller('meetings')
 @UseGuards(JwtAuthGuard)
@@ -51,5 +52,22 @@ export class MeetingController {
   @Get('summary/:code')
   async getSummary(@Param('code') code: string) {
     return this.meetingService.getMeetingSummary(code);
+  }
+
+  @Get(':id/livekit/token')
+  async getLiveKitToken(@Param('id') id: string, @Request() req) {
+    const roomName = id;
+    const participantName = req.user.email || `User ${req.user.id}`;
+    
+    // In production, these should come from environment variables.
+    // Using hardcoded devkey/secret as per docker-compose for this exercise.
+    const at = new AccessToken('devkey', 'secret', {
+      identity: req.user.id,
+      name: participantName,
+    });
+    at.addGrant({ roomJoin: true, room: roomName });
+    
+    const token = await at.toJwt();
+    return { token };
   }
 }

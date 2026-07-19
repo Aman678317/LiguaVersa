@@ -7,6 +7,7 @@ import { io } from 'socket.io-client';
 import { useAuth } from '../context/AuthContext';
 import MeetingCreatedModal from '../components/MeetingCreatedModal';
 import IncomingCallModal from '../components/IncomingCallModal';
+import IncomingAICallModal from '../components/IncomingAICallModal';
 import ContactsTab from '../components/ContactsTab';
 import HistoryTab from '../components/HistoryTab';
 import SettingsTab from '../components/SettingsTab';
@@ -25,6 +26,7 @@ const Dashboard = () => {
   const { token, user } = useAuth();
   const [createdMeetingCode, setCreatedMeetingCode] = useState(null);
   const [incomingCall, setIncomingCall] = useState(null);
+  const [incomingAICall, setIncomingAICall] = useState(null);
   const [upcomingMeetings, setUpcomingMeetings] = useState([]);
   const [allMeetings, setAllMeetings] = useState([]);
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
@@ -100,6 +102,21 @@ const Dashboard = () => {
           });
         }
       }
+      if (eventName === 'ai-call-ring') {
+        setIncomingAICall(args[0]);
+        if ('Notification' in window && Notification.permission === 'granted') {
+          new Notification('Incoming AI Call 🤖', {
+            body: 'Incoming AI-translated call!',
+          });
+        }
+      }
+      if (eventName === 'ai-call-accepted') {
+        const { roomId } = args[0];
+        navigate(`/aicall/${roomId}`);
+      }
+      if (eventName === 'ai-call-rejected') {
+        alert("The user declined the AI call.");
+      }
     });
 
     return () => socket.disconnect();
@@ -161,6 +178,24 @@ const Dashboard = () => {
     } finally {
       setIsCreating(false);
     }
+  };
+
+  const handleCallAIContact = (contact) => {
+    const roomId = `ai-${Date.now()}`;
+    const socket = io(BACKEND_URL, { 
+      transports: ['websocket'],
+      query: { userId: user.id }
+    });
+    
+    socket.emit('initiate-ai-call', {
+      targetUserId: contact.contactId,
+      callerId: user.id,
+      callerName: user.email?.split('@')[0],
+      roomId
+    });
+    
+    // We wait for accept-ai-call or reject-ai-call event (handled in useEffect socket)
+    alert(`Ringing ${contact.email} for an AI translated call...`);
   };
 
   const handleJoinMeeting = async (e) => {
@@ -396,7 +431,7 @@ const Dashboard = () => {
           ) : activeTab === 'calendar' ? (
             <CalendarTab events={allMeetings} onEventClick={(event) => setSelectedMeeting(event)} />
           ) : activeTab === 'contacts' ? (
-            <ContactsTab currentUserId={user?.id} onCallContact={handleCallContact} onlineUsers={onlineUsers} />
+            <ContactsTab currentUserId={user?.id} onCallContact={handleCallContact} onCallAIContact={handleCallAIContact} onlineUsers={onlineUsers} />
           ) : activeTab === 'history' ? (
             <HistoryTab />
           ) : (
@@ -418,6 +453,13 @@ const Dashboard = () => {
         invitation={incomingCall} 
         onAccept={() => setIncomingCall(null)} 
         onDecline={() => setIncomingCall(null)} 
+      />
+
+      <IncomingAICallModal 
+        callData={incomingAICall} 
+        currentUserId={user?.id}
+        onAccept={() => setIncomingAICall(null)} 
+        onDecline={() => setIncomingAICall(null)} 
       />
 
       <ScheduleMeetingModal 

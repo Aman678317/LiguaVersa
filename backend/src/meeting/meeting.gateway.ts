@@ -120,6 +120,26 @@ export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect 
     client.to(data.targetUserId).emit('ice-candidate', { candidate: data.candidate, callerId: data.callerId });
   }
 
+  // --- AI Remote Call Signaling ---
+  @SubscribeMessage('initiate-ai-call')
+  handleInitiateAiCall(@MessageBody() data: { targetUserId: string, callerId: string, callerName: string, roomId: string }, @ConnectedSocket() client: Socket) {
+    client.to(data.targetUserId).emit('ai-call-ring', { 
+      callerId: data.callerId, 
+      callerName: data.callerName,
+      roomId: data.roomId 
+    });
+  }
+
+  @SubscribeMessage('accept-ai-call')
+  handleAcceptAiCall(@MessageBody() data: { targetUserId: string, roomId: string }, @ConnectedSocket() client: Socket) {
+    client.to(data.targetUserId).emit('ai-call-accepted', { roomId: data.roomId });
+  }
+
+  @SubscribeMessage('reject-ai-call')
+  handleRejectAiCall(@MessageBody() data: { targetUserId: string }, @ConnectedSocket() client: Socket) {
+    client.to(data.targetUserId).emit('ai-call-rejected');
+  }
+
   @SubscribeMessage('set-language')
   handleSetLanguage(@MessageBody() data: any, @ConnectedSocket() client: Socket) {
     this.socketSettings.set(client.id, { ...(this.socketSettings.get(client.id) || {}), ...data });

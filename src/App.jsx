@@ -12,6 +12,7 @@ import SettingsPage from './pages/SettingsPage';
 import AdminDashboard from './pages/AdminDashboard';
 import ProtectedRoute from './components/ProtectedRoute';
 import Scene from './components/canvas/Scene';
+import AICallRoom from './pages/AICallRoom';
 import Footer from './components/Footer';
 
 function App() {
@@ -51,6 +52,11 @@ function App() {
             } 
           />
         <Route path="/meet/:id" element={<MeetingRoom />} />
+        <Route path="/aicall/:roomId" element={
+          <ProtectedRoute>
+            <AICallRoom />
+          </ProtectedRoute>
+        } />
         <Route path="/summary/:id" element={<MeetingSummary />} />
       </Routes>
       </Router>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Phone, Trash2, ShieldAlert, UserPlus, Search } from 'lucide-react';
+import { Phone, Trash2, ShieldAlert, UserPlus, Search, Bot } from 'lucide-react';
 import { BACKEND_URL } from '../config';
 import { useAuth } from '../context/AuthContext';
 import './ContactsTab.css';
@@ -171,6 +171,14 @@ const ContactsTab = ({ currentUserId, onCallContact, onlineUsers }) => {
                     onClick={() => onCallContact(contact.contactId)}
                   >
                     <Phone size={18} />
+                  </button>
+                  <button 
+                    className="btn-primary icon-btn call-btn" 
+                    title="AI Translated Call"
+                    style={{ background: '#ff007f' }}
+                    onClick={() => onCallAIContact && onCallAIContact(contact)}
+                  >
+                    <Bot size={18} />
                   </button>
                   <button 
                     className="btn-danger icon-btn" 
