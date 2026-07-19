@@ -75,7 +75,15 @@ export class MeetingService {
       include: {
         host: { select: { email: true, profile: true } },
         participants: { include: { user: { select: { email: true, profile: true } } } },
-        recordings: true
+        recordings: true,
+        speechHistories: {
+          include: {
+            participant: {
+              include: { user: { select: { email: true, profile: true } } }
+            }
+          },
+          orderBy: { createdAt: 'asc' }
+        }
       }
     });
 
