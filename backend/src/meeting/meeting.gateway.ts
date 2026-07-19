@@ -140,6 +140,26 @@ export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect 
     client.to(data.roomId).emit('chat:typing', { sender: data.sender, isTyping: data.isTyping });
   }
 
+  @SubscribeMessage('chat:voice')
+  async handleChatVoice(@MessageBody() data: { audioChunk: ArrayBuffer, sender: string, senderUserId: string, roomId: string, sourceLang: string }, @ConnectedSocket() client: Socket) {
+    try {
+      const buffer = Buffer.from(data.audioChunk);
+      const transcript = await this.speechService.transcribeAudio(buffer, 'audio/webm');
+      if (transcript && transcript.trim().length > 0) {
+        await this.handleChatMessage({
+          message: transcript,
+          sender: data.sender,
+          senderUserId: data.senderUserId,
+          roomId: data.roomId,
+          sourceLang: data.sourceLang
+        }, client);
+      }
+    } catch (e) {
+      console.error("Error processing voice message:", e);
+      client.emit('chat:error', { message: 'Failed to process voice message.' });
+    }
+  }
+
   // --- Real-Time Voice Translation Pipeline ---
 
   @SubscribeMessage('translation:start')

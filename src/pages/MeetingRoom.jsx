@@ -43,6 +43,7 @@ const MeetingRoom = () => {
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [participants, setParticipants] = useState([]);
   const [chatMessages, setChatMessages] = useState([]);
+  const [typingUsers, setTypingUsers] = useState([]);
   const [isRecording, setIsRecording] = useState(false);
   const recordingManagerRef = useRef(null);
   const captionsLogRef = useRef([]);
@@ -165,6 +166,16 @@ const MeetingRoom = () => {
         socketRef.current.on('chat-message', (data) => {
           setChatMessages(prev => [...prev, data]);
         });
+
+        socketRef.current.on('chat:typing', (data) => {
+          setTypingUsers(prev => {
+            if (data.isTyping) {
+              return prev.includes(data.sender) ? prev : [...prev, data.sender];
+            } else {
+              return prev.filter(u => u !== data.sender);
+            }
+          });
+        });
       }).catch(err => {
         console.error("Failed to get media devices:", err);
         setBackendStatus('Camera/Mic Blocked');
@@ -266,9 +277,35 @@ const MeetingRoom = () => {
     socketRef.current.emit('chat-message', {
       message: text,
       sender: 'Remote User',
+      senderUserId: user?.id,
       roomId: id,
       sourceLang: sourceName
     });
+  };
+
+  const handleTyping = (isTyping) => {
+    socketRef.current?.emit('chat:typing', {
+      isTyping,
+      roomId: id,
+      sender: 'Remote User'
+    });
+  };
+
+  const handleSendVoiceMessage = (arrayBuffer) => {
+    socketRef.current?.emit('chat:voice', {
+      audioChunk: arrayBuffer,
+      sender: 'Remote User',
+      senderUserId: user?.id,
+      roomId: id,
+      sourceLang: LANGUAGES.find(l => l.code === sourceLangRef.current)?.name || 'English'
+    });
+  };
+
+  const handleRequestSmartReplies = async () => {
+    // Mocking smart replies based on last message for Phase 5 prototype
+    const lastMsg = chatMessages[chatMessages.length - 1]?.message || '';
+    if (lastMsg.includes('?')) return ['I agree', 'Can you clarify?', 'No, I don\'t think so'];
+    return ['Sounds good!', 'Got it.', 'Thanks!'];
   };
 
   const toggleScreenShare = async () => {
@@ -462,6 +499,10 @@ const MeetingRoom = () => {
           participants={participants}
           chatMessages={chatMessages}
           sendMessage={sendMessage}
+          typingUsers={typingUsers}
+          onTyping={handleTyping}
+          sendVoiceMessage={handleSendVoiceMessage}
+          requestSmartReplies={handleRequestSmartReplies}
         />
       </div>
     </div>
