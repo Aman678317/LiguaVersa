@@ -6,9 +6,9 @@ import { UserModule } from './user/user.module';
 import { ContactModule } from './contact/contact.module';
 import { AuthModule } from './auth/auth.module';
 import { HistoryModule } from './history/history.module';
-
+import { ChatModule } from './chat/chat.module';
 @Module({
-  imports: [PrismaModule, TranslationModule, MeetingModule, UserModule, ContactModule, AuthModule, HistoryModule],
+  imports: [PrismaModule, TranslationModule, MeetingModule, UserModule, ContactModule, AuthModule, HistoryModule, ChatModule],
   controllers: [],
   providers: [],
 })

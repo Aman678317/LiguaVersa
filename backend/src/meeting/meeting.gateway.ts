@@ -3,6 +3,7 @@ import { Server, Socket } from 'socket.io';
 import { TranslationService } from './translation.service';
 import { SpeechService } from './speech.service';
 import { TtsService } from './tts.service';
+import { ChatService } from '../chat/chat.service';
 
 @WebSocketGateway({ cors: { origin: '*' }, maxHttpBufferSize: 1e8 })
 export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect {
@@ -10,6 +11,7 @@ export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect 
     private translationService: TranslationService,
     private speechService: SpeechService,
     private ttsService: TtsService,
+    private chatService: ChatService,
   ) {}
 
   @WebSocketServer()
@@ -69,34 +71,79 @@ export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect 
     this.socketSettings.set(client.id, data);
   }
 
+  // --- Enterprise Multilingual Chat ---
+  
   @SubscribeMessage('chat-message')
-  async handleChatMessage(@MessageBody() data: { message: string, sender: string, roomId: string, sourceLang: string }, @ConnectedSocket() client: Socket) {
+  async handleChatMessage(@MessageBody() data: { message: string, sender: string, senderUserId: string, roomId: string, sourceLang: string }, @ConnectedSocket() client: Socket) {
+    // 1. Detect language & save original message
+    const detectedLang = data.sourceLang; // Fast path: assume sourceLang is accurate, can be enhanced with AI
+    let dbMessage = null;
+    try {
+      dbMessage = await this.chatService.saveMessage(data.roomId, data.senderUserId || 'unknown', data.message, detectedLang, 1.0);
+    } catch (e) {
+      console.warn("Could not save message to DB. Proceeding with delivery.", e);
+    }
+
     const sockets = await this.server.in(data.roomId).fetchSockets();
-    for (const socket of sockets) {
-      if (socket.id === client.id) continue;
+    
+    // 2. Multicast Translation and Delivery
+    await Promise.all(sockets.map(async (socket) => {
+      // Send the original message to the sender without translating
+      if (socket.id === client.id) {
+        this.server.to(socket.id).emit('chat-message', {
+          id: dbMessage?.id,
+          message: data.message,
+          originalMessage: data.message,
+          sender: data.sender,
+          isSelf: true,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        });
+        return;
+      }
       
       const userSettings = this.socketSettings.get(socket.id) || {};
       const targetLang = userSettings.translationLanguage || userSettings.lang || 'English';
+      const autoTranslate = userSettings.autoTranslateChat !== false;
       let translatedMsg = data.message;
       
-      if (data.sourceLang !== targetLang) {
-        translatedMsg = await this.translationService.translateText(data.message, data.sourceLang, targetLang);
+      try {
+        if (autoTranslate && data.sourceLang !== targetLang) {
+          const start = Date.now();
+          translatedMsg = await this.translationService.translateText(data.message, data.sourceLang, targetLang);
+          const timeMs = Date.now() - start;
+          
+          if (dbMessage) {
+            await this.chatService.saveTranslation(dbMessage.id, targetLang, translatedMsg, timeMs, translatedMsg.length, false);
+          }
+        }
+      } catch (e) {
+        console.error(`Translation failed for user ${socket.id}`, e);
+        // Fallback to original message
+        translatedMsg = data.message;
       }
       
       this.server.to(socket.id).emit('chat-message', {
+        id: dbMessage?.id,
         message: translatedMsg,
-        originalMessage: data.message,
+        originalMessage: userSettings.showOriginalMessage !== false ? data.message : null,
         sender: data.sender,
+        isSelf: false,
+        targetLang,
+        sourceLang: data.sourceLang,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       });
-    }
+    }));
+  }
+
+  @SubscribeMessage('chat:typing')
+  handleTyping(@MessageBody() data: { isTyping: boolean, roomId: string, sender: string }, @ConnectedSocket() client: Socket) {
+    client.to(data.roomId).emit('chat:typing', { sender: data.sender, isTyping: data.isTyping });
   }
 
   // --- Real-Time Voice Translation Pipeline ---
 
   @SubscribeMessage('translation:start')
   handleTranslationStart(@MessageBody() data: { meetingId: string, sourceLang: string }, @ConnectedSocket() client: Socket) {
-    // Initialize stream session
     this.activeStreams.set(client.id, { buffer: [], timer: null });
   }
 
@@ -122,18 +169,15 @@ export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect 
 
       streamSession.buffer.push(buffer);
 
-      // Debounce logic for basic partial translation stream grouping
       if (streamSession.timer) clearTimeout(streamSession.timer);
 
       streamSession.timer = setTimeout(async () => {
         const fullBuffer = Buffer.concat(streamSession.buffer);
-        streamSession.buffer = []; // Reset buffer after flush
+        streamSession.buffer = []; 
         
-        // 1. Speech to Text (STT)
         const transcript = await this.speechService.transcribeAudio(fullBuffer, 'audio/webm');
         if (!transcript || transcript.trim().length === 0) return;
 
-        // Broadcast original caption to everyone
         this.server.to(data.roomId).emit('translation:caption', {
           speakerId: data.senderId,
           text: transcript,
@@ -141,11 +185,10 @@ export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect 
           timestamp: Date.now()
         });
 
-        // 2. Process for each target listener in parallel
         const sockets = await this.server.in(data.roomId).fetchSockets();
         
         await Promise.all(sockets.map(async (socket) => {
-          if (socket.id === client.id) return; // Skip sender
+          if (socket.id === client.id) return; 
           
           const userSettings = this.socketSettings.get(socket.id) || {};
           const isTranslationEnabled = userSettings.translationEnabled !== false;
@@ -157,29 +200,25 @@ export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect 
 
           let translatedText = transcript;
           
-          // 3. Translation
           if (data.sourceLang !== targetLang) {
             translatedText = await this.translationService.translateText(transcript, data.sourceLang, targetLang);
           }
 
-          // Emit translated text for subtitle UI
           this.server.to(socket.id).emit('translation:text', {
             senderId: data.senderId,
             originalText: transcript,
             translatedText: translatedText,
           });
 
-          // 4. Text to Speech (TTS)
           const audioBuffer = await this.ttsService.generateSpeech(translatedText, targetVoice);
           
-          // Broadcast the generated audio stream specifically to this user
           this.server.to(socket.id).emit('translation:audio-out', {
             senderId: data.senderId,
             sequenceId: data.sequenceId,
             audioData: audioBuffer,
           });
         }));
-      }, 800); // Wait 800ms for continuous speech to form a better sentence chunk
+      }, 800);
 
     } catch (error) {
       console.error('Translation Pipeline Error:', error);

@@ -7,9 +7,10 @@ import { TranslationService } from './translation.service';
 import { SpeechService } from './speech.service';
 import { TtsService } from './tts.service';
 import { RecordingController } from './recording.controller';
+import { ChatModule } from '../chat/chat.module';
 
 @Module({
-  imports: [PrismaModule],
+  imports: [PrismaModule, ChatModule],
   controllers: [MeetingController, RecordingController],
   providers: [MeetingGateway, MeetingService, TranslationService, SpeechService, TtsService],
 })
