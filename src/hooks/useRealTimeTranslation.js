@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { VAD } from '../utils/VAD';
 
 export const useRealTimeTranslation = (socket, roomId, userId, sourceLang, isEnabled) => {
   const [captions, setCaptions] = useState([]);
@@ -8,6 +9,8 @@ export const useRealTimeTranslation = (socket, roomId, userId, sourceLang, isEna
   const audioContextRef = useRef(null);
   const nextPlayTimeRef = useRef(0);
   const lastChunkTimeRef = useRef(0);
+  const sequenceIdRef = useRef(0);
+  const vadRef = useRef(null);
 
   // Initialize Audio Playback Queue
   useEffect(() => {
@@ -59,6 +62,10 @@ export const useRealTimeTranslation = (socket, roomId, userId, sourceLang, isEna
 
         source.start(nextPlayTimeRef.current);
         nextPlayTimeRef.current += audioBuffer.duration;
+
+        // Note: Ducking of WebRTC audio happens in MeetingRoom.jsx via AudioMixer
+        // emit custom event so the UI knows translated audio is playing
+        window.dispatchEvent(new CustomEvent('translation:playing', { detail: { duration: audioBuffer.duration } }));
       } catch (e) {
         console.error("Audio playback error:", e);
       }
@@ -80,15 +87,33 @@ export const useRealTimeTranslation = (socket, roomId, userId, sourceLang, isEna
     if (!socket || !isEnabled) return;
     
     try {
+      if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
+        await audioContextRef.current.resume();
+      }
+
       setIsTranslating(true);
+
+      // Initialize VAD
+      if (!vadRef.current) {
+        vadRef.current = new VAD(audioContextRef.current, stream);
+      }
+
       const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
       mediaRecorderRef.current = recorder;
       
       recorder.ondataavailable = async (e) => {
         if (e.data.size > 0 && isEnabled) {
+          // Check Voice Activity Detection
+          if (vadRef.current && !vadRef.current.isSpeaking()) {
+            return; // Skip silent chunks
+          }
+
           lastChunkTimeRef.current = Date.now();
+          sequenceIdRef.current += 1;
           const arrayBuffer = await e.data.arrayBuffer();
-          socket.emit('translation:audio', {
+          
+          socket.emit('translation:chunk', {
+            sequenceId: sequenceIdRef.current,
             audioChunk: arrayBuffer,
             senderId: userId,
             roomId,
@@ -99,6 +124,8 @@ export const useRealTimeTranslation = (socket, roomId, userId, sourceLang, isEna
       
       // Request chunks every 400ms for low latency STT streaming
       recorder.start(400);
+      
+      socket.emit('translation:start', { meetingId: roomId, sourceLang });
     } catch (e) {
       console.error("Recording error:", e);
       setIsTranslating(false);
@@ -109,8 +136,13 @@ export const useRealTimeTranslation = (socket, roomId, userId, sourceLang, isEna
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       mediaRecorderRef.current.stop();
     }
+    if (vadRef.current) {
+      vadRef.current.stop();
+      vadRef.current = null;
+    }
+    socket?.emit('translation:stop', { meetingId: roomId });
     setIsTranslating(false);
-  }, []);
+  }, [socket, roomId]);
 
-  return { captions, latency, isTranslating, startRecording, stopRecording };
+  return { captions, latency, isTranslating, startRecording, stopRecording, audioContext: audioContextRef.current };
 };
