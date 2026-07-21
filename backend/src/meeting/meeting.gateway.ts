@@ -336,16 +336,22 @@ export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect 
             });
 
             const translatedAudio = response.data;
-            const translatedText = response.headers['x-translated-text'];
+            const rawTranslatedText = response.headers['x-translated-text'];
+            const rawOriginalText = response.headers['x-original-text'];
+            const detectedLang = response.headers['x-detected-lang'];
+            const translatedText = Buffer.isBuffer(rawTranslatedText) ? rawTranslatedText.toString('utf8') : (rawTranslatedText || '');
+            const originalText = Buffer.isBuffer(rawOriginalText) ? rawOriginalText.toString('utf8') : (rawOriginalText || '');
+            const decodedTranslatedText = translatedText ? Buffer.from(translatedText, 'base64').toString('utf8') : translatedText;
+            const decodedOriginalText = originalText ? Buffer.from(originalText, 'base64').toString('utf8') : originalText;
             
-            if (translatedText) {
-               // Broadcast partial/final caption
+            if (decodedTranslatedText || decodedOriginalText) {
                this.server.to(socket.id).emit('caption:final', {
                  speakerId: data.senderId,
                  sequenceId: data.sequenceId,
-                 originalText: translatedText, // Original text from STT not easily returned in this simplified header, assuming AI service could be updated to return both. Using translated text for now.
-                 translatedText: translatedText,
+                 originalText: decodedOriginalText || decodedTranslatedText,
+                 translatedText: decodedTranslatedText || decodedOriginalText,
                  targetLang: targetLang,
+                 sourceLang: detectedLang || data.sourceLang,
                  timestamp: Date.now()
                });
 
@@ -353,8 +359,8 @@ export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect 
                this.captionService.saveCaptionHistory(
                  data.senderId || 'unknown',
                  data.roomId,
-                 translatedText,
-                 translatedText,
+                 decodedOriginalText || decodedTranslatedText,
+                 decodedTranslatedText || decodedOriginalText,
                  targetLang,
                  0.95,
                  800

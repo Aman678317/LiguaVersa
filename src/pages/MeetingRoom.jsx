@@ -69,6 +69,7 @@ const MeetingRoom = () => {
   useEffect(() => { sourceLangRef.current = sourceLang; }, [sourceLang]);
 
   const socketRef = useRef();
+  const [socket, setSocket] = useState(null);
   const peersRef = useRef([]); // Stores peer instances
   const streamRef = useRef();
   const screenStreamRef = useRef(null);
@@ -84,9 +85,9 @@ const MeetingRoom = () => {
     stopRecording,
     audioContext
   } = useRealTimeTranslation(
-    socketRef.current, 
+    socket, 
     id, 
-    socketRef.current?.id || user?.id || 'local', 
+    user?.id || socketRef.current?.id || 'local', 
     sourceLang, 
     translationEnabled
   );
@@ -155,6 +156,7 @@ const MeetingRoom = () => {
     socketRef.current = io(BACKEND_URL, {
       transports: ['websocket'],
     });
+    setSocket(socketRef.current);
 
     socketRef.current.on('connect', () => {
       console.log('✅ Connected to Backend!', socketRef.current.id);
@@ -162,11 +164,15 @@ const MeetingRoom = () => {
       
       const langName = LANGUAGES.find(l => l.code === sourceLangRef.current)?.name || 'English';
       const settings = user?.settings || {};
+      const sourceLanguageName = LANGUAGES.find(l => l.code === sourceLangRef.current)?.name || 'English';
+      const targetLanguageName = LANGUAGES.find(l => l.code === (settings.translationLanguage || 'hi-IN'))?.name || 'Hindi';
       socketRef.current.emit('set-language', { 
         ...settings, 
-        lang: langName, 
-        captionLanguage: LANGUAGES.find(l => l.code === (settings.captionLanguage || 'en-US'))?.name || 'English',
-        translationLanguage: LANGUAGES.find(l => l.code === (settings.translationLanguage || 'en-US'))?.name || 'English'
+        lang: sourceLanguageName, 
+        captionLanguage: sourceLanguageName,
+        translationLanguage: targetLanguageName,
+        translationEnabled,
+        translationVoice: targetVoice
       });
       
       navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then((stream) => {
