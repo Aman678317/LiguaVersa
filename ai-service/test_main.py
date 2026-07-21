@@ -1,3 +1,4 @@
+import main
 from main import detect_language, normalize_language_code, translate_text
 
 
@@ -14,7 +15,7 @@ def test_normalize_language_code_maps_common_names():
     assert normalize_language_code("English") == "en"
 
 
-def test_translate_text_has_fallback_for_hindi_english():
+def test_translate_text_has_fallback_for_hindi_english(monkeypatch):
+    monkeypatch.setattr(main, "HF_TOKEN", None)
     translated = translate_text("Hello", "en", "hi")
-    assert translated
-    assert "नमस्ते" in translated or "Hello" in translated
+    assert translated == "नमस्ते"

@@ -142,10 +142,13 @@ const MeetingRoom = () => {
   useEffect(() => {
     if (socketRef.current) {
       const settings = user?.settings || {};
+      const configuredTargetLanguageCode = settings.translationLanguage || 'hi-IN';
+      const targetLanguageName = LANGUAGES.find(l => l.code === configuredTargetLanguageCode)?.name || 'Hindi';
       socketRef.current.emit('set-language', { 
         ...settings, 
         lang: sourceLang, 
-        translationLanguage: sourceLang,
+        captionLanguage: sourceLang,
+        translationLanguage: targetLanguageName,
         translationEnabled,
         translationVoice: targetVoice
       });
