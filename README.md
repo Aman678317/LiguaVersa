@@ -92,7 +92,8 @@ To run this project locally, you will need the following environment variables.
 ```env
 DATABASE_URL="postgresql://user:password@host:port/db?schema=public"
 JWT_SECRET="your_jwt_secret"
-GEMINI_API_KEY="your_google_gemini_api_key"
+OPENAI_API_KEY="your_openai_api_key"
+OPENROUTER_API_KEY="your_openrouter_api_key"
 GOOGLE_CLIENT_ID="your_oauth_client_id"
 GOOGLE_CLIENT_SECRET="your_oauth_client_secret"
 FRONTEND_URL="http://localhost:5173"

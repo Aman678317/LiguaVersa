@@ -3,6 +3,9 @@ import { Server, Socket } from 'socket.io';
 import { ChatService } from '../chat/chat.service';
 import { CaptionService } from './caption.service';
 import { AnalyticsService } from '../analytics/analytics.service';
+import { SpeechService } from './speech.service';
+import { TranslationService } from './translation.service';
+import { TtsService } from './tts.service';
 import * as os from 'os';
 
 @WebSocketGateway({ cors: { origin: '*' }, maxHttpBufferSize: 1e8 })
@@ -11,6 +14,9 @@ export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect 
     private chatService: ChatService,
     private captionService: CaptionService,
     private analyticsService: AnalyticsService,
+    private speechService: SpeechService,
+    private translationService: TranslationService,
+    private ttsService: TtsService,
   ) {
     setInterval(() => this.broadcastSystemHealth(), 5000);
   }

@@ -9,4 +9,16 @@ services:
       - key: PORT
         value: 10000
       - key: DATABASE_URL
-        sync: false # User will input their Supabase URL in Render Dashboard
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: FRONTEND_URL
+        sync: false

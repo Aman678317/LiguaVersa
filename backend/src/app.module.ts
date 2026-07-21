@@ -1,6 +1,5 @@
 import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
-import { TranslationModule } from './translation/translation.module';
 import { MeetingModule } from './meeting/meeting.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { UserModule } from './user/user.module';
@@ -20,7 +19,6 @@ import { ThrottlerModule } from '@nestjs/throttler';
       limit: 100, // 100 requests per minute
     }]),
     PrismaModule, 
-    TranslationModule, 
     MeetingModule, 
     UserModule, 
     ContactModule, 
