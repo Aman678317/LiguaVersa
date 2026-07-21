@@ -68,6 +68,36 @@ class TranslateRequest(BaseModel):
     sourceLang: str
     targetLang: str
 
+class ChatRequest(BaseModel):
+    question: str
+    language: str
+    context: str
+
+@app.post("/chat")
+async def handle_chat(req: ChatRequest):
+    if not GEMINI_API_KEY:
+        return {"answer": "AI Chat is disabled because GEMINI_API_KEY is not set."}
+    
+    try:
+        model = genai.GenerativeModel("gemini-1.5-flash")
+        prompt = f"""
+You are an AI Meeting Assistant. You will be provided with the JSON summary of a meeting.
+Based ONLY on this context, answer the user's question. 
+If the answer is not in the context, say so politely.
+Provide your final answer in the requested language: {req.language}.
+
+Context:
+{req.context}
+
+User Question:
+{req.question}
+"""
+        response = model.generate_content(prompt)
+        return {"answer": response.text.strip()}
+    except Exception as e:
+        print(f"Gemini chat failed: {e}")
+        return {"answer": "Sorry, I encountered an error while processing your question."}
+
 @app.post("/translate")
 async def handle_translate(req: TranslateRequest):
     translated = translate_text(req.text, req.sourceLang, req.targetLang)

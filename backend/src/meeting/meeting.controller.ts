@@ -61,6 +61,24 @@ export class MeetingController {
     if (!summaryData || !summaryData.meeting) {
       return { answer: 'Meeting not found.' };
     }
-    return { answer: 'AI chat with summary is temporarily disabled during refactoring.' };
+    
+    // Construct context from latest recording
+    const latestRecording = summaryData.meeting.recordings?.[summaryData.meeting.recordings.length - 1];
+    const summaryJson = latestRecording?.summaryJson || {};
+    const contextStr = typeof summaryJson === 'string' ? summaryJson : JSON.stringify(summaryJson);
+    
+    try {
+      const axios = require('axios');
+      const aiServiceUrl = process.env.AI_SERVICE_URL || 'http://localhost:8000';
+      const response = await axios.post(`${aiServiceUrl}/chat`, {
+        question,
+        language: language || 'English',
+        context: contextStr || 'No summary available.'
+      });
+      return { answer: response.data.answer };
+    } catch (e) {
+      console.error('Chat endpoint error:', e.message);
+      return { answer: 'Sorry, I encountered an error connecting to the AI service.' };
+    }
   }
 }
