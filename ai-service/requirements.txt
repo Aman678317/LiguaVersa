@@ -1,11 +1,8 @@
 fastapi
 uvicorn
-livekit
-livekit-agents
-livekit-plugins-silero
-livekit-plugins-piper
 faster-whisper
 requests
 python-dotenv
 pydantic
 numpy
+google-generativeai

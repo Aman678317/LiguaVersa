@@ -2,15 +2,13 @@ import { Controller, Post, UseGuards, UseInterceptors, UploadedFile, Body, Req, 
 import { FileInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PrismaService } from '../prisma/prisma.service';
-import { TranslationService } from './translation.service';
 import * as fs from 'fs';
 import * as path from 'path';
 
 @Controller('recordings')
 export class RecordingController {
   constructor(
-    private prisma: PrismaService,
-    private translationService: TranslationService
+    private prisma: PrismaService
   ) {}
 
   @UseGuards(JwtAuthGuard)
@@ -49,16 +47,13 @@ export class RecordingController {
       outStream.end();
     }
 
-    // Trigger AI summary generation using TranslationService
-    const summary = await this.translationService.generateMeetingSummary(meetingId);
-
     // Save recording metadata to DB
     const recording = await this.prisma.recording.create({
       data: {
         meetingId,
         url: `/uploads/${meetingId}.webm`,
         status: 'COMPLETED',
-        summaryJson: summary,
+        summaryJson: '{}',
       }
     });
 

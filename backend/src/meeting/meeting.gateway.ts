@@ -1,8 +1,5 @@
 import { WebSocketGateway, SubscribeMessage, MessageBody, ConnectedSocket, WebSocketServer, OnGatewayConnection, OnGatewayDisconnect } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
-import { TranslationService } from './translation.service';
-import { SpeechService } from './speech.service';
-import { TtsService } from './tts.service';
 import { ChatService } from '../chat/chat.service';
 import { CaptionService } from './caption.service';
 import { AnalyticsService } from '../analytics/analytics.service';
@@ -11,9 +8,6 @@ import * as os from 'os';
 @WebSocketGateway({ cors: { origin: '*' }, maxHttpBufferSize: 1e8 })
 export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect {
   constructor(
-    private translationService: TranslationService,
-    private speechService: SpeechService,
-    private ttsService: TtsService,
     private chatService: ChatService,
     private captionService: CaptionService,
     private analyticsService: AnalyticsService,
@@ -222,7 +216,14 @@ export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect 
       try {
         if (autoTranslate && data.sourceLang !== targetLang) {
           const start = Date.now();
-          translatedMsg = await this.translationService.translateText(data.message, data.sourceLang, targetLang);
+          const axios = require('axios');
+          const aiServiceUrl = process.env.AI_SERVICE_URL || 'http://localhost:8000';
+          const response = await axios.post(`${aiServiceUrl}/translate`, {
+            text: data.message,
+            sourceLang: data.sourceLang,
+            targetLang: targetLang
+          });
+          translatedMsg = response.data.translatedText || data.message;
           const timeMs = Date.now() - start;
           
           if (dbMessage) {
@@ -257,7 +258,13 @@ export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect 
   async handleChatVoice(@MessageBody() data: { audioChunk: ArrayBuffer, sender: string, senderUserId: string, roomId: string, sourceLang: string }, @ConnectedSocket() client: Socket) {
     try {
       const buffer = Buffer.from(data.audioChunk);
-      const transcript = await this.speechService.transcribeAudio(buffer, 'audio/webm');
+      const axios = require('axios');
+      const aiServiceUrl = process.env.AI_SERVICE_URL || 'http://localhost:8000';
+      const response = await axios.post(`${aiServiceUrl}/transcribe`, buffer, {
+        headers: { 'Content-Type': 'application/octet-stream' }
+      });
+      const transcript = response.data.text;
+      
       if (transcript && transcript.trim().length > 0) {
         await this.handleChatMessage({
           message: transcript,
@@ -270,7 +277,7 @@ export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect 
     } catch (e) {
       console.error("Error processing voice message:", e);
       client.emit('chat:error', { message: 'Failed to process voice message.' });
-      this.analyticsService.logError({ service: 'speech', message: e.message });
+      this.analyticsService.logError({ service: 'speech', message: e.message || 'Error' });
     }
   }
 
