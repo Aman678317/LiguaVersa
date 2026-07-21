@@ -309,81 +309,75 @@ export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect 
         const fullBuffer = Buffer.concat(streamSession.buffer);
         streamSession.buffer = []; 
         
-        const transcript = await this.speechService.transcribeAudio(fullBuffer, 'audio/webm');
-        if (!transcript || transcript.trim().length === 0) return;
+        try {
+          // Parallel Pipeline: STT -> Translate -> TTS via AI Service
+          const aiServiceUrl = process.env.AI_SERVICE_URL || 'http://localhost:8000';
+          const axios = require('axios');
+          
+          const sockets = await this.server.in(data.roomId).fetchSockets();
+          
+          await Promise.all(sockets.map(async (socket) => {
+            if (socket.id === client.id) return; // Sender handled separately if needed
+            
+            const userSettings = this.socketSettings.get(socket.id) || {};
+            const isTranslationEnabled = userSettings.translationEnabled !== false;
+            
+            if (!isTranslationEnabled) return;
 
-        // Broadcast partial caption for live feedback (simulated immediately for responsiveness)
-        this.server.to(data.roomId).emit('caption:partial', {
-          speakerId: data.senderId,
-          text: transcript,
-          timestamp: Date.now()
-        });
-
-        const sockets = await this.server.in(data.roomId).fetchSockets();
-        
-        await Promise.all(sockets.map(async (socket) => {
-          if (socket.id === client.id) {
-            // Echo back to sender
-            this.server.to(socket.id).emit('caption:final', {
-              speakerId: data.senderId,
-              sequenceId: data.sequenceId,
-              originalText: transcript,
-              translatedText: transcript,
-              targetLang: data.sourceLang,
-              timestamp: Date.now()
+            const targetLang = userSettings.translationLanguage || userSettings.lang || 'English';
+            
+            const response = await axios.post(`${aiServiceUrl}/process-audio`, fullBuffer, {
+              headers: { 
+                'Content-Type': 'application/octet-stream',
+                'X-Source-Lang': data.sourceLang,
+                'X-Target-Lang': targetLang
+              },
+              responseType: 'arraybuffer'
             });
-            return; 
-          }
-          
-          const userSettings = this.socketSettings.get(socket.id) || {};
-          const isTranslationEnabled = userSettings.translationEnabled !== false;
-          
-          if (!isTranslationEnabled) return;
 
-          const targetLang = userSettings.translationLanguage || userSettings.lang || 'English';
-          const targetVoice = userSettings.translationVoice || 'alloy'; 
+            const translatedAudio = response.data;
+            const translatedText = response.headers['x-translated-text'];
+            
+            if (translatedText) {
+               // Broadcast partial/final caption
+               this.server.to(socket.id).emit('caption:final', {
+                 speakerId: data.senderId,
+                 sequenceId: data.sequenceId,
+                 originalText: translatedText, // Original text from STT not easily returned in this simplified header, assuming AI service could be updated to return both. Using translated text for now.
+                 translatedText: translatedText,
+                 targetLang: targetLang,
+                 timestamp: Date.now()
+               });
 
-          let translatedText = transcript;
-          
-          if (data.sourceLang !== targetLang) {
-            translatedText = await this.translationService.translateText(transcript, data.sourceLang, targetLang);
-          }
+               // Save caption history asynchronously
+               this.captionService.saveCaptionHistory(
+                 data.senderId || 'unknown',
+                 data.roomId,
+                 translatedText,
+                 translatedText,
+                 targetLang,
+                 0.95,
+                 800
+               );
+            }
 
-          // Save caption history asynchronously
-          this.captionService.saveCaptionHistory(
-            data.senderId || 'unknown',
-            data.roomId,
-            transcript,
-            translatedText,
-            targetLang,
-            0.95,
-            800
-          );
+            if (translatedAudio && translatedAudio.length > 0) {
+               // Send TTS AUDIO ONLY TO THE SENDER SO SENDER CAN SEND VIA WEBRTC
+               this.server.to(client.id).emit('translation:audio-out', {
+                 senderId: data.senderId,
+                 sequenceId: data.sequenceId,
+                 audioData: translatedAudio,
+                 translatedText: translatedText,
+                 targetLang: targetLang,
+                 targetSocketId: socket.id
+               });
+            }
+          }));
+        } catch (err) {
+          console.error("AI Pipeline failed:", err.message);
+        }
 
-          // Emit final synchronized caption
-          this.server.to(socket.id).emit('caption:final', {
-            speakerId: data.senderId,
-            sequenceId: data.sequenceId,
-            originalText: transcript,
-            translatedText: translatedText,
-            targetLang: targetLang,
-            timestamp: Date.now()
-          });
-
-          // Text to Speech
-          const audioBuffer = await this.ttsService.generateSpeech(translatedText, targetVoice);
-          
-          // SEND TTS AUDIO ONLY TO THE SENDER (client.id) SO SENDER CAN SEND VIA WEBRTC
-          this.server.to(client.id).emit('translation:audio-out', {
-            senderId: data.senderId,
-            sequenceId: data.sequenceId,
-            audioData: audioBuffer,
-            translatedText: translatedText,
-            targetLang: targetLang,
-            targetSocketId: socket.id // To identify which peer this track is for
-          });
-        }));
-      }, 800);
+      }, 900); // Wait until we have roughly ~900ms of speech
 
     } catch (error) {
       console.error('Translation Pipeline Error:', error);
