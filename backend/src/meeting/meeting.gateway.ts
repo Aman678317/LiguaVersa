@@ -222,7 +222,8 @@ export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect 
             text: data.message,
             sourceLang: data.sourceLang,
             targetLang: targetLang
-          });
+          }, { timeout: 10000 });
+
           translatedMsg = response.data.translatedText || data.message;
           const timeMs = Date.now() - start;
           
@@ -339,8 +340,10 @@ export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect 
                 'X-Source-Lang': data.sourceLang,
                 'X-Target-Lang': targetLang
               },
-              responseType: 'arraybuffer'
+              responseType: 'arraybuffer',
+              timeout: 15000
             });
+
 
             const translatedAudio = response.data;
             const rawTranslatedText = response.headers['x-translated-text'];
