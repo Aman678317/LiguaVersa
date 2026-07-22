@@ -14,14 +14,17 @@ services:
         sync: false # You will enter this on Render dashboard
       - key: JWT_SECRET
         generateValue: true # Render will generate a strong secret automatically
-      - key: GEMINI_API_KEY
-        sync: false # Enter your AI key on Render dashboard
       - key: GOOGLE_CLIENT_ID
         sync: false
       - key: GOOGLE_CLIENT_SECRET
         sync: false
       - key: FRONTEND_URL
         value: "https://lingua-versa-frontend.onrender.com" # Auto-links to frontend
+      - key: AI_SERVICE_URL
+        fromService:
+          type: web
+          name: lingua-versa-ai-service
+          envVarKey: RENDER_EXTERNAL_URL
 
   # 2. React (Vite) Frontend Static Site
   - type: web
@@ -37,3 +40,14 @@ services:
           type: web
           name: lingua-versa-backend
           envVarKey: RENDER_EXTERNAL_URL
+
+  # 3. Python AI Service
+  - type: web
+    name: lingua-versa-ai-service
+    env: python
+    region: frankfurt
+    plan: free
+    dockerfilePath: ai-service/Dockerfile
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false # Enter your Gemini AI key on Render dashboard

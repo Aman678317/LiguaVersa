@@ -19,7 +19,7 @@ Lingua Versa AI is a real-time voice and chat translation platform.
 
 ### Translation API Failures
 - **Symptom**: Translations failing (`[Error]` in UI).
-- **Action**: Verify `OPENROUTER_API_KEY` is active and not rate-limited. Rotate key if necessary.
+- **Action**: Verify `GEMINI_API_KEY` on `ai-service` is active and not rate-limited. Rotate key if necessary.
 
 ## 3. Routine Operations
 
