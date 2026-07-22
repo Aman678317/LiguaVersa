@@ -511,11 +511,29 @@ const MeetingRoom = () => {
     if (recordingManagerRef.current) {
       recordingManagerRef.current.stopRecording();
       setIsRecording(false);
+      setTimeout(() => {
+        const downloaded = recordingManagerRef.current.downloadVideo();
+        if (downloaded) {
+          alert("🎥 Meeting Recording Saved & Downloaded to your computer!");
+        }
+      }, 500);
+    }
+  };
+
+  const handleDownloadVideo = () => {
+    if (recordingManagerRef.current && recordingManagerRef.current.recordedChunks.length > 0) {
+      recordingManagerRef.current.downloadVideo();
+    } else {
+      alert("No video recording active or saved yet. Click the red Record button (🔴) to start recording your meeting, then click it again to save & download!");
     }
   };
 
   const handleExportCaptions = (format) => {
-    exportCaptions(captionsLogRef.current, format, sourceLang);
+    if (!captions || captions.length === 0) {
+      alert("No captions to export yet! Turn on Live Translation / Captions during your call.");
+      return;
+    }
+    exportCaptions(captionsLogRef.current.length > 0 ? captionsLogRef.current : captions, format, sourceLang);
   };
 
   return (
@@ -618,8 +636,10 @@ const MeetingRoom = () => {
             onStartRecording={handleStartRecording}
             onStopRecording={handleStopRecording}
             onExportCaptions={handleExportCaptions}
+            onDownloadVideo={handleDownloadVideo}
           />
         </div>
+
 
         <Sidebar 
           isOpen={isSidebarOpen} 
