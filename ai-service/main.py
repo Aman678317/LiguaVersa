@@ -8,6 +8,9 @@ from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 
 import google.generativeai as genai
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -22,6 +25,7 @@ app = FastAPI()
 
 # Configuration
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+
 gemini_model = None
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
