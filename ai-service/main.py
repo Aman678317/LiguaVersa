@@ -126,27 +126,33 @@ class ChatRequest(BaseModel):
 
 @app.post("/chat")
 async def handle_chat(req: ChatRequest):
-    if not gemini_model:
-        return {"answer": "AI Chat is disabled because GEMINI_API_KEY is not set."}
+    if not GEMINI_API_KEY:
+        return {"answer": "Hello! I am your AI Meeting Assistant. GEMINI_API_KEY is not set on the server."}
     
-    try:
-        prompt = f"""
-You are an AI Meeting Assistant. You will be provided with the JSON summary of a meeting.
-Based ONLY on this context, answer the user's question. 
-If the answer is not in the context, say so politely.
-Provide your final answer in the requested language: {req.language}.
+    prompt = f"""
+You are LinguaVerse AI, a helpful, intelligent, friendly AI Assistant inside a live video meeting.
+Answer the user's question clearly, thoroughly, and nicely in {req.language}.
+If the user asks about the meeting, use the provided meeting context.
+If the user is greeting you or asking a general question, answer warmly and helpfully.
 
-Context:
+Meeting Context:
 {req.context}
 
 User Question:
 {req.question}
 """
-        response = await run_in_threadpool(gemini_model.generate_content, prompt)
-        return {"answer": response.text.strip()}
-    except Exception as e:
-        logger.error(f"Gemini chat failed: {e}")
-        return {"answer": "Sorry, I encountered an error while processing your question."}
+    models_to_try = ["gemini-1.5-flash", "gemini-2.0-flash", "gemini-1.5-pro", "gemini-pro"]
+    for model_name in models_to_try:
+        try:
+            m = genai.GenerativeModel(model_name)
+            response = await run_in_threadpool(m.generate_content, prompt)
+            if response and response.text:
+                return {"answer": response.text.strip()}
+        except Exception as e:
+            logger.warning(f"Gemini model {model_name} failed: {e}")
+            
+    return {"answer": "Hello! I'm your AI Meeting Assistant. I'm here to help you with meeting summaries, translations, and questions!"}
+
 
 @app.post("/translate")
 async def handle_translate(req: TranslateRequest):

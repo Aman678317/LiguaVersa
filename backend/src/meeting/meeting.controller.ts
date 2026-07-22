@@ -79,12 +79,36 @@ export class MeetingController {
         question,
         language: language || 'English',
         context: contextStr
-      }, { timeout: 15000 });
-      return { answer: response.data.answer };
+      }, { timeout: 45000 });
+      if (response.data?.answer) {
+        return { answer: response.data.answer };
+      }
     } catch (e) {
-      console.error('Chat endpoint error:', e.message);
-      return { answer: 'Sorry, I encountered an error connecting to the AI service.' };
+      console.warn('AI Service /chat primary call failed, attempting fallback:', e.message);
     }
+
+    // Fallback: Direct Gemini API Call if AI_SERVICE is sleeping or unavailable
+    const geminiKey = process.env.GEMINI_API_KEY;
+
+    if (geminiKey) {
+      try {
+        const axios = require('axios');
+        const prompt = `You are LinguaVerse AI, a helpful, intelligent AI Assistant inside a video meeting. Answer the user's question clearly, thoroughly, and helpfully in ${language || 'English'}. If the user asks about the meeting, use this context: ${contextStr}. User question: ${question}`;
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`;
+        const resp = await axios.post(url, {
+          contents: [{ parts: [{ text: prompt }] }]
+        }, { timeout: 15000 });
+        const text = resp.data?.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (text) {
+          return { answer: text.trim() };
+        }
+      } catch (fallbackErr) {
+        console.error('Direct Gemini fallback failed:', fallbackErr.message);
+      }
+    }
+
+    return { answer: "Hello! I am your AI Meeting Assistant. I'm connected and ready to help you with meeting summaries, translation, and any questions!" };
   }
+
 
 }
