@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Bot, Send, User, Loader2, Globe, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { BACKEND_URL } from '../config';
+import ChatBotOrb from './ChatBotOrb';
 
 const LANGUAGES = [
   { code: 'en-US', name: 'English' },
@@ -71,9 +72,22 @@ const AIChatBot = ({ meetingCode, token }) => {
         overflow: 'hidden' 
       }}
     >
-      {/* Header */}
-      <div style={{ padding: '16px 20px', borderBottom: '1px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(0,0,0,0.2)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+      {/* Header with 3D Orb Canvas Layer behind content */}
+      <div 
+        style={{ 
+          position: 'relative',
+          overflow: 'hidden',
+          padding: '16px 20px', 
+          borderBottom: '1px solid rgba(255,255,255,0.08)', 
+          display: 'flex', 
+          alignItems: 'center', 
+          justify: 'space-between', 
+          background: 'rgba(0,0,0,0.3)' 
+        }}
+      >
+        <ChatBotOrb />
+
+        <div style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', gap: '12px' }}>
           <motion.div
             animate={{ 
               y: [0, -3, 0],
@@ -106,7 +120,7 @@ const AIChatBot = ({ meetingCode, token }) => {
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(255,255,255,0.05)', padding: '4px 12px', borderRadius: '20px', border: '1px solid rgba(255,255,255,0.08)' }}>
+        <div style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(255,255,255,0.05)', padding: '4px 12px', borderRadius: '20px', border: '1px solid rgba(255,255,255,0.08)' }}>
           <Globe size={14} color="#00FFA3" />
           <select 
             value={botLanguage} 
