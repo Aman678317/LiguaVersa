@@ -632,7 +632,11 @@ const MeetingRoom = () => {
           onTyping={handleTyping}
           sendVoiceMessage={handleSendVoiceMessage}
           requestSmartReplies={handleRequestSmartReplies}
+          meetingCode={id}
+          token={token}
+          setActiveTab={setActiveTab}
         />
+
       </div>
     </div>
   );

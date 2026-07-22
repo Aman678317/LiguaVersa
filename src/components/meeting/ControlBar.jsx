@@ -47,9 +47,10 @@ const ControlBar = ({
             <MonitorUp />
           </button>
 
-          <button className="control-btn ai-btn" onClick={() => toggleSidebar('captions')}>
+          <button className={`control-btn ai-btn ${activeTab === 'ai-bot' ? 'active' : ''}`} onClick={() => toggleSidebar('ai-bot')} title="AI Assistant">
             <Sparkles />
           </button>
+
           
           {!isRecording ? (
             <button className="control-btn" onClick={onStartRecording} title="Start Recording">

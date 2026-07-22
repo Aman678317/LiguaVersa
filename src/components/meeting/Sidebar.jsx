@@ -1,10 +1,25 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Send, UserMinus, ToggleLeft, ToggleRight, Mic, Globe } from 'lucide-react';
+import { X, Send, UserMinus, ToggleLeft, ToggleRight, Mic, Globe, Bot, MessageSquare, Users, Settings as SettingsIcon } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { VoiceRecorder } from '../chat/VoiceRecorder';
 import { SmartReplies } from '../chat/SmartReplies';
+import AIChatBot from '../AIChatBot';
 
-const Sidebar = ({ isOpen, activeTab, onClose, participants, chatMessages = [], sendMessage, typingUsers = [], onTyping, sendVoiceMessage, requestSmartReplies }) => {
+const Sidebar = ({ 
+  isOpen, 
+  activeTab, 
+  onClose, 
+  participants, 
+  chatMessages = [], 
+  sendMessage, 
+  typingUsers = [], 
+  onTyping, 
+  sendVoiceMessage, 
+  requestSmartReplies,
+  meetingCode,
+  token,
+  setActiveTab
+}) => {
   const [chatInput, setChatInput] = useState('');
   const messagesEndRef = useRef(null);
   
@@ -49,9 +64,10 @@ const Sidebar = ({ isOpen, activeTab, onClose, participants, chatMessages = [], 
 
   const getTitle = () => {
     if (activeTab === 'chat') return 'In-call Messages';
+    if (activeTab === 'ai-bot' || activeTab === 'captions') return 'AI Assistant';
     if (activeTab === 'participants') return 'Participants';
     if (activeTab === 'settings') return 'Settings';
-    return '';
+    return 'In-call Messages';
   };
 
   return (
@@ -64,9 +80,109 @@ const Sidebar = ({ isOpen, activeTab, onClose, participants, chatMessages = [], 
           exit={{ x: 350, opacity: 0 }}
           transition={{ type: "spring", stiffness: 300, damping: 30 }}
         >
-          <div className="sidebar-header">
-            <h3>{getTitle()}</h3>
-            <button className="close-btn" onClick={onClose}><X size={20} /></button>
+          <div className="sidebar-header" style={{ flexDirection: 'column', gap: '12px', alignItems: 'stretch', paddingBottom: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <h3>{getTitle()}</h3>
+              <button className="close-btn" onClick={onClose}><X size={20} /></button>
+            </div>
+
+            {/* Sub-navigation Tabs */}
+            {setActiveTab && (
+              <div style={{ display: 'flex', gap: '6px', background: 'rgba(255,255,255,0.05)', padding: '4px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.08)' }}>
+                <button
+                  onClick={() => setActiveTab('chat')}
+                  style={{
+                    flex: 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px',
+                    padding: '6px 8px',
+                    borderRadius: '8px',
+                    border: 'none',
+                    background: activeTab === 'chat' ? 'rgba(0,255,163,0.15)' : 'transparent',
+                    color: activeTab === 'chat' ? '#00FFA3' : 'rgba(255,255,255,0.6)',
+                    fontSize: '0.78rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  <MessageSquare size={14} />
+                  <span>Chat</span>
+                </button>
+
+                <button
+                  onClick={() => setActiveTab('ai-bot')}
+                  style={{
+                    flex: 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+
+                    gap: '6px',
+                    padding: '6px 8px',
+                    borderRadius: '8px',
+                    border: 'none',
+                    background: (activeTab === 'ai-bot' || activeTab === 'captions') ? 'rgba(0,255,163,0.15)' : 'transparent',
+                    color: (activeTab === 'ai-bot' || activeTab === 'captions') ? '#00FFA3' : 'rgba(255,255,255,0.6)',
+                    fontSize: '0.78rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  <Bot size={14} />
+                  <span>AI Bot</span>
+                </button>
+
+                <button
+                  onClick={() => setActiveTab('participants')}
+                  style={{
+                    flex: 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px',
+                    padding: '6px 8px',
+                    borderRadius: '8px',
+                    border: 'none',
+                    background: activeTab === 'participants' ? 'rgba(0,255,163,0.15)' : 'transparent',
+                    color: activeTab === 'participants' ? '#00FFA3' : 'rgba(255,255,255,0.6)',
+                    fontSize: '0.78rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  <Users size={14} />
+                  <span>Users</span>
+                </button>
+
+                <button
+                  onClick={() => setActiveTab('settings')}
+                  style={{
+                    flex: 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px',
+                    padding: '6px 8px',
+                    borderRadius: '8px',
+                    border: 'none',
+                    background: activeTab === 'settings' ? 'rgba(0,255,163,0.15)' : 'transparent',
+                    color: activeTab === 'settings' ? '#00FFA3' : 'rgba(255,255,255,0.6)',
+                    fontSize: '0.78rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  <SettingsIcon size={14} />
+                  <span>Config</span>
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="sidebar-content">
@@ -140,6 +256,12 @@ const Sidebar = ({ isOpen, activeTab, onClose, participants, chatMessages = [], 
                   />
                   <button className="send-btn" onClick={handleSend}><Send size={18} /></button>
                 </div>
+              </div>
+            )}
+
+            {(activeTab === 'ai-bot' || activeTab === 'captions') && (
+              <div style={{ height: '100%', overflow: 'hidden' }}>
+                <AIChatBot meetingCode={meetingCode} token={token} />
               </div>
             )}
 

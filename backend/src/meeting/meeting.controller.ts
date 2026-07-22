@@ -57,15 +57,20 @@ export class MeetingController {
 
   @Post('summary/:code/chat')
   async chatWithSummary(@Param('code') code: string, @Body('question') question: string, @Body('language') language?: string) {
-    const summaryData = await this.meetingService.getMeetingSummary(code);
-    if (!summaryData || !summaryData.meeting) {
-      return { answer: 'Meeting not found.' };
+    let contextStr = 'Live video conferencing meeting in progress on LinguaVerse.';
+    try {
+      const summaryData = await this.meetingService.getMeetingSummary(code);
+      if (summaryData && summaryData.meeting) {
+        const latestRecording = summaryData.meeting.recordings?.[summaryData.meeting.recordings.length - 1];
+        const summaryJson = latestRecording?.summaryJson || {};
+        const str = typeof summaryJson === 'string' ? summaryJson : JSON.stringify(summaryJson);
+        if (str && str !== '{}') {
+          contextStr = str;
+        }
+      }
+    } catch (e) {
+      console.warn('Could not fetch meeting summary context:', e.message);
     }
-    
-    // Construct context from latest recording
-    const latestRecording = summaryData.meeting.recordings?.[summaryData.meeting.recordings.length - 1];
-    const summaryJson = latestRecording?.summaryJson || {};
-    const contextStr = typeof summaryJson === 'string' ? summaryJson : JSON.stringify(summaryJson);
     
     try {
       const axios = require('axios');
@@ -73,12 +78,13 @@ export class MeetingController {
       const response = await axios.post(`${aiServiceUrl}/chat`, {
         question,
         language: language || 'English',
-        context: contextStr || 'No summary available.'
-      });
+        context: contextStr
+      }, { timeout: 15000 });
       return { answer: response.data.answer };
     } catch (e) {
       console.error('Chat endpoint error:', e.message);
       return { answer: 'Sorry, I encountered an error connecting to the AI service.' };
     }
   }
+
 }
