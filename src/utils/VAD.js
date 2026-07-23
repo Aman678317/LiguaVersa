@@ -5,10 +5,10 @@ export class VAD {
     this.stream = stream;
     this.options = {
       fftSize: 512,
-      minDecibels: -70,
+      minDecibels: -80,
       maxDecibels: -10,
       smoothingTimeConstant: 0.1,
-      threshold: 0.05, // Volume threshold for speech
+      threshold: 0.01, // Sensitive volume threshold for speech detection
       ...options
     };
 

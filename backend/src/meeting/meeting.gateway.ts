@@ -336,14 +336,15 @@ export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect 
           const sockets = await this.server.in(data.roomId).fetchSockets();
           
           await Promise.all(sockets.map(async (socket) => {
-            if (socket.id === client.id) return; // Sender handled separately if needed
-            
+            const isSelf = (socket.id === client.id);
             const userSettings = this.socketSettings.get(socket.id) || {};
             const isTranslationEnabled = userSettings.translationEnabled !== false;
             
             if (!isTranslationEnabled) return;
 
-            const targetLang = userSettings.translationLanguage || userSettings.lang || 'en-US';
+            const targetLang = isSelf 
+              ? (userSettings.lang || data.sourceLang || 'en-US')
+              : (userSettings.translationLanguage || userSettings.lang || 'en-US');
             
             const response = await axios.post(`${aiServiceUrl}/process-audio`, fullBuffer, {
               headers: { 
@@ -367,7 +368,7 @@ export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect 
             
             if (decodedTranslatedText || decodedOriginalText) {
                this.server.to(socket.id).emit('caption:final', {
-                 speakerId: data.senderId,
+                 speakerId: isSelf ? 'You' : data.senderId,
                  sequenceId: data.sequenceId,
                  originalText: decodedOriginalText || decodedTranslatedText,
                  translatedText: decodedTranslatedText || decodedOriginalText,
@@ -389,7 +390,7 @@ export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect 
                );
             }
 
-            if (translatedAudio && translatedAudio.length > 0) {
+            if (!isSelf && translatedAudio && translatedAudio.length > 0) {
                // Send TTS AUDIO ONLY TO THE SENDER SO SENDER CAN SEND VIA WEBRTC
                this.server.to(client.id).emit('translation:audio-out', {
                  senderId: data.senderId,

@@ -41,6 +41,14 @@ export const TranslationPanel = ({
         <div className="panel-content">
           <h3>Meeting Settings</h3>
           
+          <div className="setting-group toggle-row">
+            <label>Live Translation</label>
+            <label className="switch">
+              <input type="checkbox" checked={isEnabled} onChange={onToggle} />
+              <span className="slider round"></span>
+            </label>
+          </div>
+
           <div className="setting-group">
             <label>My Language</label>
             <select value={targetLang} onChange={(e) => onLangChange(e.target.value)}>
