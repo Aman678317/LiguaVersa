@@ -29,17 +29,24 @@ export const LiveCaptions = ({ captions, isEnabled, settings = {} }) => {
     <div className="live-captions-container" ref={containerRef} style={positionStyles}>
       {captions.map((cap, i) => {
         const isSelf = cap.speakerId === 'You';
+        const isDegraded = cap.status === 'degraded' || cap.status === 'failed';
         return (
           <div 
             key={i} 
             className={`caption-bubble ${cap.isPartial ? 'partial' : 'final'} ${isSelf ? 'self' : 'remote'}`}
             style={{ 
-              backgroundColor: `rgba(0,0,0,${settings.opacity || 0.7})`,
-              fontSize: getFontSize()
+              backgroundColor: isDegraded ? 'rgba(60, 20, 20, 0.85)' : `rgba(0,0,0,${settings.opacity || 0.7})`,
+              fontSize: getFontSize(),
+              borderLeft: isDegraded ? '3px solid #ffcc00' : 'none'
             }}
           >
-            <div className="caption-sender" style={{ color: settings.color || '#00FFA3' }}>
-              {cap.speakerId} {cap.targetLang && `(${cap.targetLang})`}
+            <div className="caption-sender" style={{ color: settings.color || '#00FFA3', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span>{cap.speakerId} {cap.targetLang && `(${cap.targetLang})`}</span>
+              {isDegraded && (
+                <span title="Translation Degraded: GEMINI_API_KEY missing or translation failed" style={{ color: '#ffcc00', cursor: 'help', fontSize: '0.9em' }}>
+                  ⚠️ (Untranslated / AI Unavailable)
+                </span>
+              )}
             </div>
             
             {settings.dualMode && cap.originalText && cap.translatedText && cap.originalText !== cap.translatedText ? (

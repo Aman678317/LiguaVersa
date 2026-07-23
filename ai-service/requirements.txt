@@ -7,3 +7,5 @@ pydantic
 numpy
 google-generativeai
 piper-tts
+edge-tts
+gTTS

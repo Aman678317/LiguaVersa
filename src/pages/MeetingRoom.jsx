@@ -51,7 +51,7 @@ const MeetingRoom = () => {
   const captionsLogRef = useRef([]);
   
   // Translation & Subtitles State
-  const [sourceLang, setSourceLang] = useState(user?.settings?.speechLanguage || 'English');
+  const [sourceLang, setSourceLang] = useState(user?.settings?.speechLanguage || 'en-US');
   const [translationEnabled, setTranslationEnabled] = useState(user?.settings?.autoStartTranslation || false);
   const [targetVoice, setTargetVoice] = useState('alloy');
   const [captionsEnabled, setCaptionsEnabled] = useState(true);
@@ -142,13 +142,12 @@ const MeetingRoom = () => {
   useEffect(() => {
     if (socketRef.current) {
       const settings = user?.settings || {};
-      const configuredTargetLanguageCode = settings.translationLanguage || 'hi-IN';
-      const targetLanguageName = LANGUAGES.find(l => l.code === configuredTargetLanguageCode)?.name || 'Hindi';
+      const targetLanguageCode = settings.translationLanguage || 'hi-IN';
       socketRef.current.emit('set-language', { 
         ...settings, 
         lang: sourceLang, 
         captionLanguage: sourceLang,
-        translationLanguage: targetLanguageName,
+        translationLanguage: targetLanguageCode,
         translationEnabled,
         translationVoice: targetVoice
       });
@@ -165,15 +164,13 @@ const MeetingRoom = () => {
       console.log('✅ Connected to Backend!', socketRef.current.id);
       setBackendStatus('Connected to Backend');
       
-      const langName = LANGUAGES.find(l => l.code === sourceLangRef.current)?.name || 'English';
       const settings = user?.settings || {};
-      const sourceLanguageName = LANGUAGES.find(l => l.code === sourceLangRef.current)?.name || 'English';
-      const targetLanguageName = LANGUAGES.find(l => l.code === (settings.translationLanguage || 'hi-IN'))?.name || 'Hindi';
+      const targetLanguageCode = settings.translationLanguage || 'hi-IN';
       socketRef.current.emit('set-language', { 
         ...settings, 
-        lang: sourceLanguageName, 
-        captionLanguage: sourceLanguageName,
-        translationLanguage: targetLanguageName,
+        lang: sourceLangRef.current, 
+        captionLanguage: sourceLangRef.current,
+        translationLanguage: targetLanguageCode,
         translationEnabled,
         translationVoice: targetVoice
       });
@@ -340,14 +337,13 @@ const MeetingRoom = () => {
     };
     
     setChatMessages(prev => [...prev, msgData]);
-    const sourceName = LANGUAGES.find(l => l.code === sourceLangRef.current)?.name || 'English';
 
     socketRef.current.emit('chat-message', {
       message: text,
       sender: 'Remote User',
       senderUserId: user?.id,
       roomId: id,
-      sourceLang: sourceName
+      sourceLang: sourceLangRef.current
     });
   };
 
@@ -365,7 +361,7 @@ const MeetingRoom = () => {
       sender: 'Remote User',
       senderUserId: user?.id,
       roomId: id,
-      sourceLang: LANGUAGES.find(l => l.code === sourceLangRef.current)?.name || 'English'
+      sourceLang: sourceLangRef.current
     });
   };
 

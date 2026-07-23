@@ -54,6 +54,8 @@ VOICES = {
     "default": "en_US-lessac-medium"
 }
 
+from tts_engines import synthesize_speech_sync
+
 def _encode_header(value: str) -> str:
     return base64.b64encode(value.encode("utf-8")).decode("ascii")
 
@@ -63,9 +65,11 @@ def _do_transcribe(file_path: str, src_lang: str = None) -> str:
         return ""
     try:
         kwargs = {"beam_size": 1}
-        # Whisper expects language code like 'en', 'es'. Pass only if we are fairly sure it's a 2-char code.
-        if src_lang and len(src_lang) == 2:
-            kwargs["language"] = src_lang
+        # Derive 2-letter ISO code from BCP-47 identifiers (e.g. ja-JP -> ja, hi-IN -> hi)
+        if src_lang:
+            iso_lang = src_lang.split("-")[0].lower()
+            if len(iso_lang) == 2:
+                kwargs["language"] = iso_lang
             
         segments, info = whisper_model.transcribe(file_path, **kwargs)
         logger.info(f"Whisper detected language: {info.language} with probability {info.language_probability}")
@@ -74,29 +78,23 @@ def _do_transcribe(file_path: str, src_lang: str = None) -> str:
         logger.error(f"Transcription failed: {e}")
         return ""
 
-def _do_tts(text: str, target_lang: str) -> bytes:
-    """Synchronous TTS synthesis, to be run in threadpool."""
-    voice = VOICES.get(target_lang[:2].lower(), VOICES["default"])
-    try:
-        cmd = ["piper", "--model", voice, "--output_raw"]
-        process = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        raw_audio, err = process.communicate(input=text.encode("utf-8"))
-        if process.returncode == 0 and raw_audio:
-            return raw_audio
-        else:
-            logger.error(f"Piper returned non-zero code or empty audio: {err.decode('utf-8')}")
-    except FileNotFoundError:
-        logger.warning("Piper executable not found in PATH.")
-    except Exception as exc:
-        logger.error(f"Piper synthesis failed: {exc}")
-    return b""
+async def translate_text_async(text: str, src_lang: str, tgt_lang: str) -> tuple[str, str]:
+    """
+    Translates text using Gemini.
+    Returns: (translated_text, status) where status is 'ok', 'degraded', or 'failed'
+    """
+    if not text.strip():
+        return text, "ok"
+        
+    src_iso = src_lang.split("-")[0].lower() if src_lang else ""
+    tgt_iso = tgt_lang.split("-")[0].lower() if tgt_lang else ""
+    
+    if src_iso == tgt_iso or src_lang == tgt_lang:
+        return text, "ok"
 
-async def translate_text_async(text: str, src_lang: str, tgt_lang: str) -> str:
-    if not text.strip() or src_lang == tgt_lang:
-        return text
     if not gemini_model:
-        logger.warning("Cannot translate: No GEMINI model initialized.")
-        return text
+        logger.warning("Cannot translate: GEMINI_API_KEY is not set.")
+        return text, "degraded"
 
     try:
         prompt = (
@@ -108,11 +106,14 @@ async def translate_text_async(text: str, src_lang: str, tgt_lang: str) -> str:
             f"{text}"
         )
         response = await run_in_threadpool(gemini_model.generate_content, prompt)
-        translated = response.text.strip()
-        return translated if translated else text
+        translated = response.text.strip() if response and response.text else ""
+        if translated:
+            return translated, "ok"
+        else:
+            return text, "degraded"
     except Exception as e:
         logger.error(f"Gemini translation failed: {e}")
-        return text
+        return text, "degraded"
 
 class TranslateRequest(BaseModel):
     text: str
@@ -156,8 +157,8 @@ User Question:
 
 @app.post("/translate")
 async def handle_translate(req: TranslateRequest):
-    translated = await translate_text_async(req.text, req.sourceLang, req.targetLang)
-    return {"translatedText": translated}
+    translated, status = await translate_text_async(req.text, req.sourceLang, req.targetLang)
+    return {"translatedText": translated, "status": status}
 
 @app.post("/transcribe")
 async def handle_transcribe(request: Request):
@@ -179,11 +180,12 @@ async def handle_transcribe(request: Request):
 @app.post("/process-audio")
 async def process_audio(request: Request):
     audio_data = await request.body()
-    src_lang = request.headers.get("X-Source-Lang", "en")
-    tgt_lang = request.headers.get("X-Target-Lang", "en")
+    src_lang = request.headers.get("X-Source-Lang", "en-US")
+    tgt_lang = request.headers.get("X-Target-Lang", "en-US")
 
     if not whisper_model:
-        return Response(content=b"", status_code=204)
+        headers = {"X-Translation-Status": "failed", "X-Translation-Error": _encode_header("Whisper model unavailable")}
+        return Response(content=b"", status_code=204, headers=headers)
 
     with tempfile.NamedTemporaryFile(suffix=".webm", delete=False) as temp_file:
         temp_path = temp_file.name
@@ -193,13 +195,16 @@ async def process_audio(request: Request):
         text = await run_in_threadpool(_do_transcribe, temp_path, src_lang)
 
         if not text:
-            return Response(content=b"", status_code=204)
+            headers = {"X-Translation-Status": "ok", "X-Translation-Note": _encode_header("No speech detected")}
+            return Response(content=b"", status_code=204, headers=headers)
 
-        translated_text = await translate_text_async(text, src_lang, tgt_lang)
+        translated_text, trans_status = await translate_text_async(text, src_lang, tgt_lang)
         tts_audio = b""
-        
+        tts_engine = "none"
+        tts_error = ""
+
         if translated_text:
-            tts_audio = await run_in_threadpool(_do_tts, translated_text, tgt_lang)
+            tts_audio, tts_engine, tts_error = await run_in_threadpool(synthesize_speech_sync, translated_text, tgt_lang)
 
         headers = {
             "X-Original-Text": _encode_header(text),
@@ -207,8 +212,12 @@ async def process_audio(request: Request):
             "X-Detected-Lang": src_lang,
             "X-Source-Lang": src_lang,
             "X-Target-Lang": tgt_lang,
+            "X-Translation-Status": trans_status,
+            "X-TTS-Engine": tts_engine,
             "X-Translation-Available": "true",
         }
+        if tts_error:
+            headers["X-TTS-Error"] = _encode_header(tts_error)
 
         return Response(content=tts_audio, media_type="application/octet-stream", headers=headers)
     finally:
@@ -223,5 +232,7 @@ def health():
         "status": "ok",
         "whisper": whisper_model is not None,
         "gemini": gemini_model is not None,
-        "piper": piper_available
+        "piper": piper_available,
+        "edge_tts": True
     }
+

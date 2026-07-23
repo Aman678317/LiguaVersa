@@ -2,20 +2,15 @@ import React, { useState } from 'react';
 import './TranslationPanel.css'; // Simple CSS for aesthetics
 
 const SUPPORTED_LANGUAGES = [
-  { code: 'en', name: 'English' },
-  { code: 'hi', name: 'Hindi' },
-  { code: 'es', name: 'Spanish' },
-  { code: 'fr', name: 'French' },
-  { code: 'ja', name: 'Japanese' },
-  { code: 'de', name: 'German' },
-  { code: 'ar', name: 'Arabic' },
-  { code: 'zh', name: 'Chinese' },
-  { code: 'ta', name: 'Tamil' },
-  { code: 'mr', name: 'Marathi' },
-  { code: 'pa', name: 'Punjabi' }
+  { code: 'en-US', name: 'English' },
+  { code: 'hi-IN', name: 'Hindi' },
+  { code: 'es-ES', name: 'Spanish' },
+  { code: 'fr-FR', name: 'French' },
+  { code: 'ja-JP', name: 'Japanese' },
+  { code: 'de-DE', name: 'German' },
+  { code: 'zh-CN', name: 'Chinese' },
+  { code: 'mr-IN', name: 'Marathi' }
 ];
-
-const VOICES = ['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer'];
 
 export const TranslationPanel = ({ 
   isEnabled, 
@@ -47,19 +42,10 @@ export const TranslationPanel = ({
           <h3>Meeting Settings</h3>
           
           <div className="setting-group">
-            <label>Language</label>
+            <label>My Language</label>
             <select value={targetLang} onChange={(e) => onLangChange(e.target.value)}>
               {SUPPORTED_LANGUAGES.map(l => (
-                <option key={l.code} value={l.name}>{l.name}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="setting-group">
-            <label>Translation</label>
-            <select value={targetVoice} onChange={(e) => onVoiceChange(e.target.value)}>
-              {SUPPORTED_LANGUAGES.map(l => (
-                <option key={l.code} value={l.name}>{l.name}</option>
+                <option key={l.code} value={l.code}>{l.name}</option>
               ))}
             </select>
           </div>

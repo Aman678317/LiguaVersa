@@ -19,4 +19,3 @@ RUN python3 -m piper.download_voices en_US-lessac-medium && \
 COPY . .
 
 CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"]
-

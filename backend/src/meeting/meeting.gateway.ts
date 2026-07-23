@@ -75,6 +75,17 @@ export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect 
     if (!this.meetingStartTimes.has(data.roomId)) {
       this.meetingStartTimes.set(data.roomId, Date.now());
     }
+
+    // Task 4: Pre-warm ping to ai-service on meeting creation/join to wake up cold-start instances
+    try {
+      const aiServiceUrl = process.env.AI_SERVICE_URL || 'http://localhost:8000';
+      const axios = require('axios');
+      axios.get(`${aiServiceUrl}/health`, { timeout: 5000 }).catch(err => {
+        console.log('AI Service pre-warm ping dispatched:', err.message);
+      });
+    } catch (e) {
+      // Ignore pre-warm errors
+    }
   }
 
   @SubscribeMessage('leave-room')
@@ -209,7 +220,7 @@ export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect 
       }
       
       const userSettings = this.socketSettings.get(socket.id) || {};
-      const targetLang = userSettings.translationLanguage || userSettings.lang || 'English';
+      const targetLang = userSettings.translationLanguage || userSettings.lang || 'en-US';
       const autoTranslate = userSettings.autoTranslateChat !== false;
       let translatedMsg = data.message;
       
@@ -332,7 +343,7 @@ export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect 
             
             if (!isTranslationEnabled) return;
 
-            const targetLang = userSettings.translationLanguage || userSettings.lang || 'English';
+            const targetLang = userSettings.translationLanguage || userSettings.lang || 'en-US';
             
             const response = await axios.post(`${aiServiceUrl}/process-audio`, fullBuffer, {
               headers: { 
@@ -341,14 +352,14 @@ export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect 
                 'X-Target-Lang': targetLang
               },
               responseType: 'arraybuffer',
-              timeout: 15000
+              timeout: 30000
             });
-
 
             const translatedAudio = response.data;
             const rawTranslatedText = response.headers['x-translated-text'];
             const rawOriginalText = response.headers['x-original-text'];
             const detectedLang = response.headers['x-detected-lang'];
+            const translationStatus = response.headers['x-translation-status'] || 'ok';
             const translatedText = Buffer.isBuffer(rawTranslatedText) ? rawTranslatedText.toString('utf8') : (rawTranslatedText || '');
             const originalText = Buffer.isBuffer(rawOriginalText) ? rawOriginalText.toString('utf8') : (rawOriginalText || '');
             const decodedTranslatedText = translatedText ? Buffer.from(translatedText, 'base64').toString('utf8') : translatedText;
@@ -362,6 +373,7 @@ export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect 
                  translatedText: decodedTranslatedText || decodedOriginalText,
                  targetLang: targetLang,
                  sourceLang: detectedLang || data.sourceLang,
+                 status: translationStatus,
                  timestamp: Date.now()
                });
 
