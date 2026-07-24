@@ -47,7 +47,7 @@ const MeetingDetailsModal = ({ isOpen, onClose, meeting, onStart, onDelete, onEd
             
             <div className="detail-row">
               <div className="detail-icon"><Languages size={18} /></div>
-              <span>{meeting.languageFlow || 'English → Japanese'}</span>
+              <span>{meeting.languageFlow || 'en-US → ja-JP'}</span>
             </div>
             
             <div className="detail-row">

@@ -154,7 +154,7 @@ const HistoryTab = () => {
                   const participantsCount = item.participants?.length || 0;
                   const transLang = item.translationSettings 
                     ? `${item.translationSettings.meetingLanguage} → ${item.translationSettings.translationLanguage}` 
-                    : 'English → Japanese';
+                    : 'en-US → ja-JP';
                   const hasRecording = item.settings?.recording ? 'Yes' : 'No';
                   
                   let status = 'Completed';

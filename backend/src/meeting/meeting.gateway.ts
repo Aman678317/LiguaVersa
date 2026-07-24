@@ -346,15 +346,30 @@ export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect 
               ? (userSettings.lang || data.sourceLang || 'en-US')
               : (userSettings.translationLanguage || userSettings.lang || 'en-US');
             
-            const response = await axios.post(`${aiServiceUrl}/process-audio`, fullBuffer, {
-              headers: { 
-                'Content-Type': 'application/octet-stream',
-                'X-Source-Lang': data.sourceLang,
-                'X-Target-Lang': targetLang
-              },
-              responseType: 'arraybuffer',
-              timeout: 30000
-            });
+            let response;
+            try {
+              response = await axios.post(`${aiServiceUrl}/process-audio`, fullBuffer, {
+                headers: {
+                  'Content-Type': 'application/octet-stream',
+                  'X-Source-Lang': data.sourceLang,
+                  'X-Target-Lang': targetLang
+                },
+                responseType: 'arraybuffer',
+                timeout: 60000
+              });
+            } catch (err) {
+              console.log("Retrying AI Pipeline for cold start...", err.message);
+              await new Promise(resolve => setTimeout(resolve, 1500));
+              response = await axios.post(`${aiServiceUrl}/process-audio`, fullBuffer, {
+                headers: {
+                  'Content-Type': 'application/octet-stream',
+                  'X-Source-Lang': data.sourceLang,
+                  'X-Target-Lang': targetLang
+                },
+                responseType: 'arraybuffer',
+                timeout: 60000
+              });
+            }
 
             const translatedAudio = response.data;
             const rawTranslatedText = response.headers['x-translated-text'];

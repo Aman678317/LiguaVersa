@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Calendar, X } from 'lucide-react';
 import './ScheduleMeetingModal.css';
 
-const LANGUAGES = ['English', 'Spanish', 'French', 'German', 'Chinese', 'Japanese', 'Hindi', 'Marathi'];
+const LANGUAGES = [{ code: 'en-US', name: 'English' }, { code: 'es-ES', name: 'Spanish' }, { code: 'fr-FR', name: 'French' }, { code: 'de-DE', name: 'German' }, { code: 'zh-CN', name: 'Chinese' }, { code: 'ja-JP', name: 'Japanese' }, { code: 'hi-IN', name: 'Hindi' }, { code: 'mr-IN', name: 'Marathi' }];
 const TIMEZONES = [
   'Pacific Time (PT)', 'Mountain Time (MT)', 'Central Time (CT)', 
   'Eastern Time (ET)', 'Greenwich Mean Time (GMT)', 'Central European Time (CET)',
@@ -19,8 +19,8 @@ const ScheduleMeetingModal = ({ isOpen, onClose, onSchedule, initialData, isEdit
     startTime: '',
     endTime: '',
     timeZone: 'Indian Standard Time (IST)',
-    meetingLanguage: 'English',
-    translationLanguage: 'Hindi',
+    meetingLanguage: 'en-US',
+    translationLanguage: 'hi-IN',
     meetingType: 'Video',
     participants: '',
     password: '',
@@ -51,8 +51,8 @@ const ScheduleMeetingModal = ({ isOpen, onClose, onSchedule, initialData, isEdit
           startTime: '',
           endTime: '',
           timeZone: 'Indian Standard Time (IST)',
-          meetingLanguage: 'English',
-          translationLanguage: 'Hindi',
+          meetingLanguage: 'en-US',
+          translationLanguage: 'hi-IN',
           meetingType: 'Video',
           participants: '',
           password: '',
@@ -158,13 +158,13 @@ const ScheduleMeetingModal = ({ isOpen, onClose, onSchedule, initialData, isEdit
                 <div className="form-group">
                   <label>Meeting Language</label>
                   <select name="meetingLanguage" value={formData.meetingLanguage} onChange={handleChange}>
-                    {LANGUAGES.map(lang => <option key={lang} value={lang}>{lang}</option>)}
+                    {LANGUAGES.map(lang => <option key={lang.code} value={lang.code}>{lang.name}</option>)}
                   </select>
                 </div>
                 <div className="form-group">
                   <label>Translation Language</label>
                   <select name="translationLanguage" value={formData.translationLanguage} onChange={handleChange}>
-                    {LANGUAGES.map(lang => <option key={lang} value={lang}>{lang}</option>)}
+                    {LANGUAGES.map(lang => <option key={lang.code} value={lang.code}>{lang.name}</option>)}
                   </select>
                 </div>
               </div>
