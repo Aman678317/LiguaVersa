@@ -275,8 +275,8 @@ const Dashboard = () => {
       password: rawMeeting.password || '',
       date,
       startTime,
-      meetingLanguage: rawMeeting.translationSettings?.meetingLanguage || 'English',
-      translationLanguage: rawMeeting.translationSettings?.translationLanguage || 'Hindi',
+      meetingLanguage: rawMeeting.translationSettings?.meetingLanguage || 'en-US',
+      translationLanguage: rawMeeting.translationSettings?.translationLanguage || 'hi-IN',
       liveTranslation: rawMeeting.settings?.liveTranslation ?? true,
       liveCaptions: rawMeeting.settings?.liveCaptions ?? true,
       aiSummary: rawMeeting.settings?.aiSummary ?? true,
@@ -404,7 +404,7 @@ const Dashboard = () => {
                       title: m.title,
                       date: m.scheduledFor ? new Date(m.scheduledFor).toLocaleDateString() : 'TBD',
                       time: m.scheduledFor ? new Date(m.scheduledFor).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'TBD',
-                      languageFlow: `${m.translationSettings?.meetingLanguage || 'English'} → ${m.translationSettings?.translationLanguage || 'Hindi'}`,
+                      languageFlow: `${m.translationSettings?.meetingLanguage || 'en-US'} → ${m.translationSettings?.translationLanguage || 'hi-IN'}`,
                       participants: `${m.participants?.length || 0} Participants`,
                       translationStatus: m.settings?.liveTranslation ? 'Translation Enabled' : 'Translation Disabled',
                       raw: m
@@ -416,7 +416,7 @@ const Dashboard = () => {
                     </div>
                     <div className="m-details">
                       <h4>{m.title}</h4>
-                      <p>{m.translationSettings?.meetingLanguage || 'English'} ➔ {m.translationSettings?.translationLanguage || 'Hindi'} | {m.participants?.length || 0} Participants</p>
+                      <p>{m.translationSettings?.meetingLanguage || 'en-US'} ➔ {m.translationSettings?.translationLanguage || 'hi-IN'} | {m.participants?.length || 0} Participants</p>
                     </div>
                     <button className="btn-secondary small" onClick={(e) => {
                       e.stopPropagation();
