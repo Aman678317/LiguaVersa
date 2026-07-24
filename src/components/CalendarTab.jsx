@@ -75,7 +75,7 @@ const CalendarTab = ({ events = [], onEventClick }) => {
               title: event.title,
               date: new Date(event.raw.scheduledFor).toLocaleDateString(),
               time: event.time,
-              languageFlow: `${event.raw.translationSettings?.meetingLanguage || 'en-US'} → ${event.raw.translationSettings?.translationLanguage || 'hi-IN'}`,
+              languageFlow: `${event.raw.translationSettings?.meetingLanguage || 'English'} → ${event.raw.translationSettings?.translationLanguage || 'Hindi'}`,
               participants: event.description,
               translationStatus: event.raw.settings?.liveTranslation ? 'Translation Enabled' : 'Translation Disabled'
             })}

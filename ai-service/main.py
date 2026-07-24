@@ -45,6 +45,15 @@ try:
 except Exception as e:
     logger.error(f"Failed to load whisper model: {e}")
 
+# Voice Mapping for Piper TTS
+VOICES = {
+    "en": "en_US-lessac-medium",
+    "es": "es_ES-davefx-medium",
+    "fr": "fr_FR-siwis-medium",
+    "hi": "hi_IN-swara-medium",
+    "default": "en_US-lessac-medium"
+}
+
 from tts_engines import synthesize_speech_sync
 
 def _encode_header(value: str) -> str:
@@ -59,7 +68,8 @@ def _do_transcribe(file_path: str, src_lang: str = None) -> str:
         # Derive 2-letter ISO code from BCP-47 identifiers (e.g. ja-JP -> ja, hi-IN -> hi)
         if src_lang:
             iso_lang = src_lang.split("-")[0].lower()
-            kwargs["language"] = iso_lang
+            if len(iso_lang) == 2:
+                kwargs["language"] = iso_lang
             
         segments, info = whisper_model.transcribe(file_path, **kwargs)
         logger.info(f"Whisper detected language: {info.language} with probability {info.language_probability}")
@@ -196,9 +206,6 @@ async def process_audio(request: Request):
         if translated_text:
             tts_audio, tts_engine, tts_error = await run_in_threadpool(synthesize_speech_sync, translated_text, tgt_lang)
 
-        if tts_error or tts_engine == "failed":
-            trans_status = "degraded"
-
         headers = {
             "X-Original-Text": _encode_header(text),
             "X-Translated-Text": _encode_header(translated_text),
@@ -208,6 +215,7 @@ async def process_audio(request: Request):
             "X-Translation-Status": trans_status,
             "X-TTS-Engine": tts_engine,
             "X-Translation-Available": "true",
+            "X-TTS-Available": "false" if (tts_error or tts_engine == "failed" or not tts_audio) else "true"
         }
         if tts_error:
             headers["X-TTS-Error"] = _encode_header(tts_error)

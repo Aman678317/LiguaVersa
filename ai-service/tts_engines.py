@@ -63,9 +63,15 @@ async def _synthesize_edge_tts_async(text: str, voice_name: str) -> bytes:
         
         try:
             await communicate.save(tmp_path)
-            with open(tmp_path, "rb") as f:
-                data = f.read()
-            return data
+            # Convert to WAV using ffmpeg (Piper equivalent format)
+            cmd = ["ffmpeg", "-i", tmp_path, "-ar", "22050", "-ac", "1", "-f", "wav", "-"]
+            process = await asyncio.create_subprocess_exec(*cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            stdout, stderr = await process.communicate()
+            if process.returncode == 0:
+                return stdout
+            else:
+                logger.error(f"ffmpeg conversion failed: {stderr.decode('utf-8', errors='ignore')}")
+                return b""
         finally:
             if os.path.exists(tmp_path):
                 os.remove(tmp_path)

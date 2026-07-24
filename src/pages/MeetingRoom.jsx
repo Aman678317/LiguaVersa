@@ -51,7 +51,7 @@ const MeetingRoom = () => {
   const captionsLogRef = useRef([]);
   
   // Translation & Subtitles State
-  const [sourceLang, setSourceLang] = useState((user?.settings?.speechLanguage === 'English') ? 'en-US' : (user?.settings?.speechLanguage || 'en-US'));
+  const [sourceLang, setSourceLang] = useState(user?.settings?.speechLanguage || 'en-US');
   const [translationEnabled, setTranslationEnabled] = useState(user?.settings?.autoStartTranslation !== false);
   const [targetVoice, setTargetVoice] = useState('alloy');
   const [captionsEnabled, setCaptionsEnabled] = useState(true);
