@@ -1,5 +1,6 @@
 import React from 'react';
 import { Globe, Check, Sparkles, X } from 'lucide-react';
+import { soundAudioSystem } from '../../utils/SoundAudioSystem';
 import './LanguageSheet.css';
 
 const LANGUAGES = [
@@ -30,6 +31,7 @@ export const LanguageSheet = ({
   if (!isOpen) return null;
 
   const handleStart = () => {
+    soundAudioSystem.playTranslationStartSound();
     onStartTranslation();
     onClose();
   };

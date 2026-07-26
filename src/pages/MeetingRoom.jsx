@@ -22,6 +22,7 @@ import { LiveCaptions } from '../components/translation/LiveCaptions';
 import { CaptionSettings } from '../components/translation/CaptionSettings';
 import { LanguageSheet } from '../components/translation/LanguageSheet';
 import { AIStatusIndicator } from '../components/translation/AIStatusIndicator';
+import { AudioSettingsModal } from '../components/meeting/AudioSettingsModal';
 
 const LANGUAGES = [
   { code: 'en-US', name: 'English' },
@@ -75,6 +76,7 @@ const MeetingRoom = () => {
     audioEnhancement: true
   });
   const [isCaptionSettingsOpen, setIsCaptionSettingsOpen] = useState(false);
+  const [isAudioSettingsOpen, setIsAudioSettingsOpen] = useState(false);
   
   const sourceLangRef = useRef(sourceLang);
   useEffect(() => { sourceLangRef.current = sourceLang; }, [sourceLang]);
@@ -615,6 +617,16 @@ const MeetingRoom = () => {
             onClose={() => setIsCaptionSettingsOpen(false)} 
             settings={captionSettings}
             onSettingsChange={setCaptionSettings} 
+          />
+
+          <AudioSettingsModal
+            isOpen={isAudioSettingsOpen}
+            onClose={() => setIsAudioSettingsOpen(false)}
+            settings={{ targetVoice, duckVolume: 0.15, autoDetect }}
+            onSettingsChange={(newSet) => {
+              if (newSet.targetVoice) setTargetVoice(newSet.targetVoice);
+              if (newSet.autoDetect !== undefined) setAutoDetect(newSet.autoDetect);
+            }}
           />
 
           <LanguageSheet 

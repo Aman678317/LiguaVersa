@@ -82,6 +82,19 @@ export const TranslationPanel = ({
             </label>
           </div>
 
+          {onOpenCaptionSettings && (
+            <button 
+              onClick={onOpenCaptionSettings}
+              style={{
+                width: '100%', marginTop: '10px', padding: '8px 12px',
+                background: 'rgba(0, 255, 163, 0.15)', border: '1px solid #00FFA3',
+                borderRadius: '8px', color: '#00FFA3', fontWeight: 600, cursor: 'pointer'
+              }}
+            >
+              🔊 Audio & Sound System
+            </button>
+          )}
+
         </div>
       )}
     </div>
