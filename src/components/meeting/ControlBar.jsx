@@ -100,6 +100,26 @@ const ControlBar = ({
             <MonitorUp />
           </button>
 
+          <button 
+            className="control-btn whatsapp-btn"
+            onClick={() => {
+              const text = encodeURIComponent(`Hey! Join my live AI translated video call on LinguaVersa:\n${window.location.href}`);
+              window.open(`https://api.whatsapp.com/send?text=${text}`, '_blank');
+            }}
+            title="Share Video Call link on WhatsApp"
+            style={{
+              background: 'rgba(37, 211, 102, 0.2)',
+              border: '1px solid #25D366',
+              color: '#25D366',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: '0 0 10px rgba(37, 211, 102, 0.3)'
+            }}
+          >
+            <span style={{ fontSize: '1.1rem', lineHeight: 1 }}>📲</span>
+          </button>
+
           <button className={`control-btn ai-btn ${activeTab === 'ai-bot' ? 'active' : ''}`} onClick={() => toggleSidebar('ai-bot')} title="AI Assistant">
             <Sparkles />
           </button>

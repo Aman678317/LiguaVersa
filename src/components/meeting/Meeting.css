@@ -444,3 +444,48 @@
   margin-top: auto;
   border-color: rgba(255, 255, 255, 0.1);
 }
+
+/* Mobile & Tablet Zoom-style Responsive Layout */
+@media (max-width: 768px) {
+  .video-grid-container {
+    padding: 60px 8px 85px 8px;
+  }
+  
+  .control-bar-wrapper {
+    bottom: 10px;
+    padding: 0 6px;
+  }
+
+  .control-bar {
+    padding: 8px 10px;
+    gap: 4px;
+    border-radius: 20px;
+  }
+
+  .control-group.left {
+    display: none !important;
+  }
+
+  .control-btn {
+    width: 42px;
+    height: 42px;
+  }
+
+  .meeting-header {
+    top: 10px;
+    left: 10px;
+    right: 10px;
+    padding: 8px 12px;
+  }
+
+  .meeting-sidebar {
+    position: fixed;
+    top: 0;
+    right: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 9999;
+    background: #0B0E14;
+  }
+}
+

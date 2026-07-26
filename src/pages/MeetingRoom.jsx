@@ -327,12 +327,23 @@ const MeetingRoom = () => {
     };
   }, [id]);
 
+const ICE_SERVERS = {
+  iceServers: [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun2.l.google.com:19302' },
+    { urls: 'stun:stun3.l.google.com:19302' },
+    { urls: 'stun:stun4.l.google.com:19302' },
+    { urls: 'stun:global.stun.twilio.com:3478' }
+  ]
+};
+
   function createPeer(userToSignal, callerID, stream) {
     const peer = new Peer({
       initiator: true,
       trickle: true,
       stream,
-      config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] }
+      config: ICE_SERVERS
     });
 
     peer.on('signal', signal => {
@@ -364,7 +375,7 @@ const MeetingRoom = () => {
       initiator: false,
       trickle: true,
       stream,
-      config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] }
+      config: ICE_SERVERS
     });
 
     peer.on('signal', signal => {
@@ -640,6 +651,20 @@ const MeetingRoom = () => {
                 }}
               >
                 Copy Invite Link
+              </button>
+              <button 
+                onClick={() => {
+                  const text = encodeURIComponent(`Hey! Join my live AI translated video call on LinguaVersa:\n${window.location.href}`);
+                  window.open(`https://api.whatsapp.com/send?text=${text}`, '_blank');
+                }}
+                style={{
+                  background: '#25D366', border: 'none', color: 'white',
+                  padding: '6px 12px', borderRadius: '8px', cursor: 'pointer', fontSize: '0.85rem',
+                  display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 'bold',
+                  boxShadow: '0 2px 10px rgba(37, 211, 102, 0.4)'
+                }}
+              >
+                📲 Share on WhatsApp
               </button>
             </div>
             <div className="meeting-badges" style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
