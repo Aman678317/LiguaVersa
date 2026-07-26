@@ -256,11 +256,6 @@ const MeetingRoom = () => {
 
       socketRef.current.on('user-joined', (data) => {
         soundAudioSystem.playUserJoinSound();
-        const stream = streamRef.current;
-        if (data.userId && !peersRef.current.some(p => p.peerID === data.userId)) {
-          const peer = createPeer(data.userId, socketRef.current.id, stream);
-          peersRef.current.push({ peerID: data.userId, peer });
-        }
       });
 
       socketRef.current.on('offer', (data) => {
@@ -334,7 +329,10 @@ const ICE_SERVERS = {
     { urls: 'stun:stun2.l.google.com:19302' },
     { urls: 'stun:stun3.l.google.com:19302' },
     { urls: 'stun:stun4.l.google.com:19302' },
-    { urls: 'stun:global.stun.twilio.com:3478' }
+    { urls: 'stun:global.stun.twilio.com:3478' },
+    { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+    { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+    { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' }
   ]
 };
 
@@ -345,6 +343,16 @@ const ICE_SERVERS = {
       stream,
       config: ICE_SERVERS
     });
+
+    peer.on('error', err => {
+      console.error('Peer error (initiator):', userToSignal, err);
+    });
+
+    if (peer._pc) {
+      peer._pc.oniceconnectionstatechange = () => {
+        console.log('ICE state (initiator):', userToSignal, peer._pc?.iceConnectionState);
+      };
+    }
 
     peer.on('signal', signal => {
       socketRef.current.emit('offer', {
@@ -377,6 +385,16 @@ const ICE_SERVERS = {
       stream,
       config: ICE_SERVERS
     });
+
+    peer.on('error', err => {
+      console.error('Peer error (receiver):', callerID, err);
+    });
+
+    if (peer._pc) {
+      peer._pc.oniceconnectionstatechange = () => {
+        console.log('ICE state (receiver):', callerID, peer._pc?.iceConnectionState);
+      };
+    }
 
     peer.on('signal', signal => {
       socketRef.current.emit('answer', {
