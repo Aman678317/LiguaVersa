@@ -201,8 +201,12 @@ const MeetingRoom = () => {
       }
     };
 
-    // 1. Initialize local media stream immediately for camera display
+    let isMounted = true;
+
+    // 1. Initialize local media stream first, then connect socket
     obtainUserMediaStream().then((stream) => {
+      if (!isMounted) return;
+
       streamRef.current = stream;
       setParticipants(prev => {
         const hasLocal = prev.some(p => p.isLocal);
@@ -217,115 +221,133 @@ const MeetingRoom = () => {
           stream: stream
         }, ...prev];
       });
-    });
 
-    // 2. Connect to Socket.IO backend
-    socketRef.current = io(BACKEND_URL, {
-      transports: ['websocket'],
-    });
-    setSocket(socketRef.current);
-
-    socketRef.current.on('connect', () => {
-      console.log('✅ Connected to Backend!', socketRef.current.id);
-      setBackendStatus('Connected to Backend');
-      soundAudioSystem.playConnectedSound();
-      
-      const settings = user?.settings || {};
-      const targetLanguageCode = settings.translationLanguage || 'hi-IN';
-      socketRef.current.emit('set-language', { 
-        ...settings, 
-        lang: sourceLangRef.current, 
-        captionLanguage: sourceLangRef.current,
-        translationLanguage: targetLanguageCode,
-        translationEnabled,
-        translationVoice: targetVoice
+      // 2. Connect to Socket.IO backend with polling fallback for mobile/restrictive networks
+      socketRef.current = io(BACKEND_URL, {
+        transports: ['websocket', 'polling'],
+        secure: true,
+        reconnection: true,
+        reconnectionAttempts: 10,
       });
+      setSocket(socketRef.current);
 
-      setParticipants(prev => prev.map(p => p.isLocal ? { ...p, id: socketRef.current.id } : p));
-      socketRef.current.emit('join-room', { roomId: id });
-
-      socketRef.current.on('all-users', (existingUsers) => {
-        console.log('📡 [WebRTC] Room members found:', existingUsers);
-        const stream = streamRef.current;
-        existingUsers.forEach(userID => {
-          if (!peersRef.current.some(p => p.peerID === userID)) {
-            console.log('🚀 [WebRTC] Initiating peer connection to existing user:', userID);
-            const peer = createPeer(userID, socketRef.current.id, stream);
-            peersRef.current.push({ peerID: userID, peer });
-          }
+      socketRef.current.on('connect', () => {
+        console.log('✅ Connected to Backend!', socketRef.current.id);
+        setBackendStatus('Connected to Backend');
+        soundAudioSystem.playConnectedSound();
+        
+        const settings = user?.settings || {};
+        const targetLanguageCode = settings.translationLanguage || 'hi-IN';
+        socketRef.current.emit('set-language', { 
+          ...settings, 
+          lang: sourceLangRef.current, 
+          captionLanguage: sourceLangRef.current,
+          translationLanguage: targetLanguageCode,
+          translationEnabled,
+          translationVoice: targetVoice
         });
-      });
 
-      socketRef.current.on('user-joined', (data) => {
-        console.log('👤 [WebRTC] New participant joined room:', data.socketId);
-        soundAudioSystem.playUserJoinSound();
-        const stream = streamRef.current;
-        if (stream && !peersRef.current.some(p => p.peerID === data.socketId)) {
-          console.log('🚀 [WebRTC] Triggering fresh offer for new joiner:', data.socketId);
-          const peer = createPeer(data.socketId, socketRef.current.id, stream);
-          peersRef.current.push({ peerID: data.socketId, peer });
-        }
-      });
+        setParticipants(prev => prev.map(p => p.isLocal ? { ...p, id: socketRef.current.id } : p));
+        socketRef.current.emit('join-room', { roomId: id });
 
-      socketRef.current.on('offer', (data) => {
-        console.log('📡 [WebRTC] Received offer from:', data.callerId);
-        const stream = streamRef.current;
-        let item = peersRef.current.find(p => p.peerID === data.callerId);
-        if (item) {
-          item.peer.signal(data.offer);
-        } else {
-          const peer = addPeer(data.offer, data.callerId, stream);
-          peersRef.current.push({ peerID: data.callerId, peer });
-        }
-      });
+        // New joiner receives list of existing room members and initiates WebRTC offer to each
+        socketRef.current.on('all-users', (existingUsers) => {
+          console.log('📡 [WebRTC] Room members found:', existingUsers);
+          const activeStream = streamRef.current || stream;
+          existingUsers.forEach(userID => {
+            if (!peersRef.current.some(p => p.peerID === userID)) {
+              console.log('🚀 [WebRTC Initiator] Creating offer peer connection to existing user:', userID);
+              const peer = createPeer(userID, socketRef.current.id, activeStream);
+              peersRef.current.push({ peerID: userID, peer });
+            }
+          });
+        });
 
-      socketRef.current.on('answer', (data) => {
-        console.log('📡 [WebRTC] Received answer from:', data.callerId);
-        const item = peersRef.current.find(p => p.peerID === data.callerId);
-        if (item) {
-          item.peer.signal(data.answer);
-        }
-      });
+        // Existing members receive notice when a new user joins
+        socketRef.current.on('user-joined', (data) => {
+          console.log('👤 [WebRTC] New participant joined room:', data.socketId);
+          soundAudioSystem.playUserJoinSound();
+        });
 
-      socketRef.current.on('ice-candidate', (data) => {
-        console.log('📡 [WebRTC] Received ICE candidate from:', data.callerId);
-        const item = peersRef.current.find(p => p.peerID === data.callerId);
-        if (item && item.peer) {
-          item.peer.signal(data.candidate);
-        }
-      });
-
-      socketRef.current.on('chat-message', (data) => {
-        setChatMessages(prev => [...prev, data]);
-      });
-
-      socketRef.current.on('chat:typing', (data) => {
-        setTypingUsers(prev => {
-          if (data.isTyping) {
-            return prev.includes(data.sender) ? prev : [...prev, data.sender];
+        // Receiving an offer from a peer -> create a receiver peer (addPeer) and answer
+        socketRef.current.on('offer', (data) => {
+          console.log('📡 [WebRTC Receiver] Received offer from:', data.callerId);
+          const activeStream = streamRef.current || stream;
+          let item = peersRef.current.find(p => p.peerID === data.callerId);
+          if (item) {
+            item.peer.signal(data.offer);
           } else {
-            return prev.filter(u => u !== data.sender);
+            const peer = addPeer(data.offer, data.callerId, activeStream);
+            peersRef.current.push({ peerID: data.callerId, peer });
+          }
+        });
+
+        // Receiving an answer from a peer -> pass signal into initiator peer
+        socketRef.current.on('answer', (data) => {
+          console.log('📡 [WebRTC Initiator] Received answer from:', data.callerId);
+          const item = peersRef.current.find(p => p.peerID === data.callerId);
+          if (item) {
+            item.peer.signal(data.answer);
+          }
+        });
+
+        // Receiving trickle ICE candidate -> pass candidate signal to peer
+        socketRef.current.on('ice-candidate', (data) => {
+          console.log('📡 [WebRTC] Received ICE candidate from:', data.callerId);
+          const item = peersRef.current.find(p => p.peerID === data.callerId);
+          if (item && item.peer) {
+            item.peer.signal(data.candidate);
+          }
+        });
+
+        // User left room -> destroy peer connection cleanly
+        socketRef.current.on('user-left', (data) => {
+          console.log('👋 [WebRTC] User left room:', data.userId);
+          const peerObj = peersRef.current.find(p => p.peerID === data.userId);
+          if (peerObj) {
+            try { peerObj.peer.destroy(); } catch (e) {}
+          }
+          peersRef.current = peersRef.current.filter(p => p.peerID !== data.userId);
+          setParticipants(prev => prev.filter(p => p.id !== data.userId));
+        });
+
+        socketRef.current.on('chat-message', (data) => {
+          setChatMessages(prev => [...prev, data]);
+        });
+
+        socketRef.current.on('chat:typing', (data) => {
+          setTypingUsers(prev => {
+            if (data.isTyping) {
+              return prev.includes(data.sender) ? prev : [...prev, data.sender];
+            } else {
+              return prev.filter(u => u !== data.sender);
+            }
+          });
+        });
+
+        socketRef.current.on('preferences:sync', (newSettings) => {
+          if (newSettings.speechLanguage) setSourceLang(newSettings.speechLanguage);
+          if (newSettings.captionFontSize) setCaptionSettings(prev => ({ ...prev, fontSize: newSettings.captionFontSize }));
+          if (newSettings.captionPosition) setCaptionSettings(prev => ({ ...prev, position: newSettings.captionPosition }));
+          if (newSettings.captionColor) setCaptionSettings(prev => ({ ...prev, color: newSettings.captionColor }));
+          if (newSettings.dualCaptionMode !== undefined) setCaptionSettings(prev => ({ ...prev, dualMode: newSettings.dualCaptionMode }));
+          if (newSettings.voiceGender || newSettings.voiceAccent) {
+            setTargetVoice(newSettings.voiceGender === 'female' ? 'nova' : 'alloy');
           }
         });
       });
 
-      socketRef.current.on('preferences:sync', (newSettings) => {
-        if (newSettings.speechLanguage) setSourceLang(newSettings.speechLanguage);
-        if (newSettings.captionFontSize) setCaptionSettings(prev => ({ ...prev, fontSize: newSettings.captionFontSize }));
-        if (newSettings.captionPosition) setCaptionSettings(prev => ({ ...prev, position: newSettings.captionPosition }));
-        if (newSettings.captionColor) setCaptionSettings(prev => ({ ...prev, color: newSettings.captionColor }));
-        if (newSettings.dualCaptionMode !== undefined) setCaptionSettings(prev => ({ ...prev, dualMode: newSettings.dualCaptionMode }));
-        if (newSettings.voiceGender || newSettings.voiceAccent) {
-          setTargetVoice(newSettings.voiceGender === 'female' ? 'nova' : 'alloy');
-        }
+      socketRef.current.on('disconnect', () => {
+        setBackendStatus('Disconnected');
       });
-    });
-
-    socketRef.current.on('disconnect', () => {
-      setBackendStatus('Disconnected');
     });
 
     return () => {
+      isMounted = false;
+      peersRef.current.forEach(p => {
+        try { p.peer.destroy(); } catch (e) {}
+      });
+      peersRef.current = [];
       if (socketRef.current) {
         socketRef.current.emit('leave-room', { roomId: id });
         socketRef.current.disconnect();
@@ -337,7 +359,6 @@ const MeetingRoom = () => {
         screenStreamRef.current.getTracks().forEach(track => track.stop());
       }
       stopRecording();
-      socketRef.current.disconnect();
     };
   }, [id]);
 
