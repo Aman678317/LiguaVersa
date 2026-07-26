@@ -281,31 +281,31 @@ const MeetingRoom = () => {
         }
       });
 
-        socketRef.current.on('chat-message', (data) => {
-          setChatMessages(prev => [...prev, data]);
-        });
+      socketRef.current.on('chat-message', (data) => {
+        setChatMessages(prev => [...prev, data]);
+      });
 
-        socketRef.current.on('chat:typing', (data) => {
-          setTypingUsers(prev => {
-            if (data.isTyping) {
-              return prev.includes(data.sender) ? prev : [...prev, data.sender];
-            } else {
-              return prev.filter(u => u !== data.sender);
-            }
-          });
-        });
-
-        socketRef.current.on('preferences:sync', (newSettings) => {
-          if (newSettings.speechLanguage) setSourceLang(newSettings.speechLanguage);
-          if (newSettings.captionFontSize) setCaptionSettings(prev => ({ ...prev, fontSize: newSettings.captionFontSize }));
-          if (newSettings.captionPosition) setCaptionSettings(prev => ({ ...prev, position: newSettings.captionPosition }));
-          if (newSettings.captionColor) setCaptionSettings(prev => ({ ...prev, color: newSettings.captionColor }));
-          if (newSettings.dualCaptionMode !== undefined) setCaptionSettings(prev => ({ ...prev, dualMode: newSettings.dualCaptionMode }));
-          if (newSettings.voiceGender || newSettings.voiceAccent) {
-            setTargetVoice(newSettings.voiceGender === 'female' ? 'nova' : 'alloy');
+      socketRef.current.on('chat:typing', (data) => {
+        setTypingUsers(prev => {
+          if (data.isTyping) {
+            return prev.includes(data.sender) ? prev : [...prev, data.sender];
+          } else {
+            return prev.filter(u => u !== data.sender);
           }
         });
       });
+
+      socketRef.current.on('preferences:sync', (newSettings) => {
+        if (newSettings.speechLanguage) setSourceLang(newSettings.speechLanguage);
+        if (newSettings.captionFontSize) setCaptionSettings(prev => ({ ...prev, fontSize: newSettings.captionFontSize }));
+        if (newSettings.captionPosition) setCaptionSettings(prev => ({ ...prev, position: newSettings.captionPosition }));
+        if (newSettings.captionColor) setCaptionSettings(prev => ({ ...prev, color: newSettings.captionColor }));
+        if (newSettings.dualCaptionMode !== undefined) setCaptionSettings(prev => ({ ...prev, dualMode: newSettings.dualCaptionMode }));
+        if (newSettings.voiceGender || newSettings.voiceAccent) {
+          setTargetVoice(newSettings.voiceGender === 'female' ? 'nova' : 'alloy');
+        }
+      });
+    });
 
     socketRef.current.on('disconnect', () => {
       setBackendStatus('Disconnected');
