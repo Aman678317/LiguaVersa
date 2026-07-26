@@ -612,3 +612,48 @@ model MeetingSummary {
 
   meeting     Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
 }
+
+
+// ---------------------------------------------------------
+// HEALTH & RECOVERY (Self-Healing AI)
+// ---------------------------------------------------------
+
+model SystemHealth {
+  id             String   @id @default(uuid())
+  component      String   // audio, video, translation, network, backend
+  status         String   // healthy, recovering, attention_required
+  latency        Int?
+  recoveryCount  Int      @default(0)
+  lastError      String?
+  lastCheck      DateTime @default(now())
+}
+
+model RecoveryLog {
+  id          String   @id @default(uuid())
+  component   String
+  problem     String
+  rootCause   String?
+  solution    String
+  success     Boolean
+  duration    Int?     // milliseconds
+  timestamp   DateTime @default(now())
+}
+
+model AiDiagnostic {
+  id           String   @id @default(uuid())
+  callId       String?
+  module       String   // whisper, gemini, piper, tts
+  healthScore  Float
+  errorMessage String?
+  retryCount   Int      @default(0)
+  timestamp    DateTime @default(now())
+}
+
+model MonitoringEvent {
+  id          String   @id @default(uuid())
+  component   String
+  severity    String   // info, warning, error, critical
+  description String
+  resolved    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+}

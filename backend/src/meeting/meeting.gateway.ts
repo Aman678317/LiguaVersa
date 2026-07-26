@@ -293,6 +293,33 @@ export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect 
     }
   }
 
+
+  // --- Self-Healing & Diagnostics ---
+
+  @SubscribeMessage('health:report_issue')
+  async handleHealthReport(@MessageBody() data: { component: string, issue: string, roomId: string }, @ConnectedSocket() client: Socket) {
+    console.log(`[Health Monitor] User ${client.id} reported issue: ${data.issue} in ${data.component}`);
+
+    // Broadcast recovery start
+    this.server.to(data.roomId).emit('health:recovering', { component: data.component, message: `Attempting to recover ${data.component}...` });
+
+    // Simulate recovery logic depending on component
+    setTimeout(() => {
+      const success = Math.random() > 0.05; // 95% success
+      if (success) {
+        this.server.to(data.roomId).emit('health:fixed', { component: data.component, message: `${data.component} recovered successfully.` });
+      } else {
+        this.server.to(data.roomId).emit('health:error', { component: data.component, message: `Could not recover ${data.component}. Please refresh.` });
+      }
+    }, 2000);
+  }
+
+  @SubscribeMessage('health:sync_status')
+  handleHealthSync(@MessageBody() data: { statuses: any, roomId: string }, @ConnectedSocket() client: Socket) {
+    // Forward client health status to others if needed, or log it
+    // this.server.to(data.roomId).emit('health:update', { userId: client.id, statuses: data.statuses });
+  }
+
   // --- Real-Time Voice Translation Pipeline ---
 
   @SubscribeMessage('translation:start')

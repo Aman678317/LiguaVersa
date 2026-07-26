@@ -21,6 +21,11 @@ import { TranslationPanel } from '../components/translation/TranslationPanel';
 import { LiveCaptions } from '../components/translation/LiveCaptions';
 import { CaptionSettings } from '../components/translation/CaptionSettings';
 
+import { useHealthMonitor } from '../hooks/useHealthMonitor';
+import { HealthIndicator } from '../components/health/HealthIndicator';
+import { RecoveryNotification } from '../components/health/RecoveryNotification';
+
+
 const LANGUAGES = [
   { code: 'en-US', name: 'English' },
   { code: 'es-ES', name: 'Spanish' },
@@ -75,6 +80,10 @@ const MeetingRoom = () => {
   const screenStreamRef = useRef(null);
   const startTime = useRef(Date.now());
   const audioMixerRef = useRef(null);
+
+  // Self-Healing Engine
+  const { healthStatus, recovering, reportIssue } = useHealthMonitor(socket, id, streamRef.current, peersRef);
+
 
   // Real-Time Voice Translation Hook
   const { 

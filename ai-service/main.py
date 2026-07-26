@@ -8,6 +8,11 @@ from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 
 import google.generativeai as genai
+
+from health_monitor import monitor
+from diagnostics import diagnostics_engine
+from recovery_engine import recovery_engine
+
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -237,3 +242,16 @@ def health():
         "edge_tts": True
     }
 
+
+
+@app.get("/diagnostics")
+def get_diagnostics():
+    return {
+        "status": monitor.get_status(),
+        "issues": diagnostics_engine.analyze()
+    }
+
+@app.post("/recover/{component}")
+def recover_component(component: str):
+    success = recovery_engine.attempt_recovery(component)
+    return {"component": component, "recovered": success}
