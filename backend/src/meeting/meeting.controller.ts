@@ -45,6 +45,18 @@ export class MeetingController {
     return this.meetingService.joinMeeting(id, data.password, req.user.id);
   }
 
+  @Post(':id/lock')
+  @UseGuards(JwtAuthGuard)
+  async toggleLock(@Param('id') id: string, @Request() req) {
+    return this.meetingService.toggleLock(id, req.user.id);
+  }
+
+  @Post(':id/waiting-room')
+  @UseGuards(JwtAuthGuard)
+  async toggleWaitingRoom(@Param('id') id: string, @Request() req) {
+    return this.meetingService.toggleWaitingRoom(id, req.user.id);
+  }
+
 
   @Get('validate/:code')
   async validateCode(@Param('code') code: string) {

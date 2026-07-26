@@ -219,6 +219,7 @@ model Meeting {
   description  String?
   password     String?
   waitingRoom  Boolean       @default(false)
+  isLocked     Boolean       @default(false)
   type         String        @default("Video") // Video, Voice, Webinar
   timezone     String        @default("UTC")
   recurringType String       @default("None") // None, Daily, Weekly, Monthly, Custom

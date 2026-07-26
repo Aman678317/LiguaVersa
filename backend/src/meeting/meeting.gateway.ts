@@ -1,9 +1,10 @@
 import { WebSocketGateway, SubscribeMessage, MessageBody, ConnectedSocket, WebSocketServer, OnGatewayConnection, OnGatewayDisconnect } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
-import { Logger } from '@nestjs/common';
+import { Logger, Inject, forwardRef } from '@nestjs/common';
 import { ChatService } from '../chat/chat.service';
 import { CaptionService } from './caption.service';
 import { AnalyticsService } from '../analytics/analytics.service';
+import { MeetingService } from './meeting.service';
 import * as os from 'os';
 
 @WebSocketGateway({ cors: { origin: '*' }, maxHttpBufferSize: 1e8 })
@@ -14,6 +15,8 @@ export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect 
     private chatService: ChatService,
     private captionService: CaptionService,
     private analyticsService: AnalyticsService,
+    @Inject(forwardRef(() => MeetingService))
+    private meetingService: MeetingService,
   ) {
     setInterval(() => this.broadcastSystemHealth(), 5000);
   }
@@ -24,8 +27,13 @@ export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect 
   private connectedUsers = new Map<string, string>(); // userId -> socketId
   private socketSettings = new Map<string, any>(); // socketId -> settings object
   private meetingStartTimes = new Map<string, number>(); // roomId -> startTime
-  // Active translation sessions (mocking a pipeline manager)
   private activeStreams = new Map<string, { buffer: Buffer[], timer: NodeJS.Timeout | null }>(); 
+  
+  // Phase 1 Host Controls State
+  private roomWaitingUsers = new Map<string, Map<string, { socketId: string; userId: string; name: string }>>(); // roomId -> (socketId -> info)
+  private roomRaisedHands = new Map<string, Set<string>>(); // roomId -> Set of socketIds
+  private roomHosts = new Map<string, string>(); // roomId -> hostUserId
+  private roomLockedState = new Map<string, boolean>(); // roomId -> isLocked
 
   private async broadcastSystemHealth() {
     if (!this.server) return;
@@ -65,6 +73,20 @@ export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect 
     }
     this.socketSettings.delete(client.id);
     this.activeStreams.delete(client.id);
+
+    // Clean up waiting room & raised hand state across rooms
+    this.roomWaitingUsers.forEach((waitingMap, roomId) => {
+      if (waitingMap.has(client.id)) {
+        waitingMap.delete(client.id);
+        this.server.in(roomId).emit('waiting-room:updated', Array.from(waitingMap.values()));
+      }
+    });
+    this.roomRaisedHands.forEach((handSet, roomId) => {
+      if (handSet.has(client.id)) {
+        handSet.delete(client.id);
+        this.server.in(roomId).emit('hand:updated', { socketId: client.id, isHandRaised: false });
+      }
+    });
   }
 
   @SubscribeMessage('get-online-users')
@@ -73,31 +95,205 @@ export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect 
   }
 
   @SubscribeMessage('join-room')
-  async handleJoinRoom(@MessageBody() data: { roomId: string }, @ConnectedSocket() client: Socket) {
+  async handleJoinRoom(@MessageBody() data: { roomId: string; name?: string }, @ConnectedSocket() client: Socket) {
+    const userId = client.handshake.query.userId as string;
+    let isHost = false;
+
+    try {
+      if (userId && data.roomId) {
+        isHost = await this.meetingService.isHost(data.roomId, userId);
+        if (isHost) {
+          this.roomHosts.set(data.roomId, userId);
+        }
+      }
+    } catch (e) {
+      this.logger.warn(`Could not verify host status for user ${userId} in room ${data.roomId}`);
+    }
+
+    const isLocked = this.roomLockedState.get(data.roomId) || false;
+
+    // 1. If meeting is locked and client is not host, deny entry
+    if (isLocked && !isHost) {
+      this.logger.log(`Socket ${client.id} denied entry to locked room ${data.roomId}`);
+      client.emit('room:locked', { message: 'Meeting is locked by the host.' });
+      return;
+    }
+
+    // 2. Check if waiting room is enabled
+    let waitingRoomEnabled = false;
+    try {
+      if (data.roomId && userId) {
+        const meeting = await this.meetingService.getMeetingById(data.roomId, userId).catch(() => null);
+        if (meeting?.waitingRoom) waitingRoomEnabled = true;
+      }
+    } catch (e) {}
+
+    if (waitingRoomEnabled && !isHost) {
+      this.logger.log(`Socket ${client.id} placed in waiting room for ${data.roomId}`);
+      if (!this.roomWaitingUsers.has(data.roomId)) {
+        this.roomWaitingUsers.set(data.roomId, new Map());
+      }
+      const waitingMap = this.roomWaitingUsers.get(data.roomId)!;
+      waitingMap.set(client.id, { socketId: client.id, userId: userId || client.id, name: data.name || 'Guest Participant' });
+
+      client.emit('room:waiting-holding', { roomId: data.roomId, message: 'Waiting for the host to admit you...' });
+      
+      // Notify host(s) in the room
+      this.server.in(data.roomId).emit('waiting-room:user-waiting', {
+        socketId: client.id,
+        userId: userId || client.id,
+        name: data.name || 'Guest Participant'
+      });
+      this.server.in(data.roomId).emit('waiting-room:updated', Array.from(waitingMap.values()));
+      return;
+    }
+
+    // 3. Normal room entry
     client.join(data.roomId);
+    client.emit('room:role', { isHost });
 
     const sockets = await this.server.in(data.roomId).fetchSockets();
     const existingUserIds = sockets.map(s => s.id).filter(id => id !== client.id);
 
-    this.logger.log(`Socket ${client.id} joined room ${data.roomId}. Total room participants: ${sockets.length}`);
+    this.logger.log(`Socket ${client.id} (Host: ${isHost}) joined room ${data.roomId}. Total room participants: ${sockets.length}`);
 
     client.emit('all-users', existingUserIds);
     client.to(data.roomId).emit('user-joined', { userId: client.id, socketId: client.id });
     
+    // Send existing waiting room users to host if joining
+    if (isHost && this.roomWaitingUsers.has(data.roomId)) {
+      const waitingMap = this.roomWaitingUsers.get(data.roomId)!;
+      client.emit('waiting-room:updated', Array.from(waitingMap.values()));
+    }
+
     if (!this.meetingStartTimes.has(data.roomId)) {
       this.meetingStartTimes.set(data.roomId, Date.now());
     }
+  }
 
-    // Task 4: Pre-warm ping to ai-service on meeting creation/join to wake up cold-start instances
-    try {
-      const aiServiceUrl = process.env.AI_SERVICE_URL || 'http://localhost:8000';
-      const axios = require('axios');
-      axios.get(`${aiServiceUrl}/health`, { timeout: 5000 }).catch(err => {
-        this.logger.debug(`AI Service pre-warm ping response: ${err.message}`);
-      });
-    } catch (e) {
-      // Ignore pre-warm errors
+  // --- Phase 1 Host-Only Socket Event Handlers ---
+
+  @SubscribeMessage('host:admit-user')
+  async handleAdmitUser(@MessageBody() data: { roomId: string; targetSocketId: string }, @ConnectedSocket() client: Socket) {
+    const userId = client.handshake.query.userId as string;
+    const isHost = await this.meetingService.isHost(data.roomId, userId).catch(() => false);
+    if (!isHost) {
+      this.logger.warn(`Non-host socket ${client.id} attempted to admit user`);
+      client.emit('error', { message: 'Unauthorized host action' });
+      return;
     }
+
+    const waitingMap = this.roomWaitingUsers.get(data.roomId);
+    if (waitingMap && waitingMap.has(data.targetSocketId)) {
+      waitingMap.delete(data.targetSocketId);
+      this.logger.log(`Host admitted socket ${data.targetSocketId} to room ${data.roomId}`);
+
+      const targetSocket = this.server.sockets.sockets.get(data.targetSocketId);
+      if (targetSocket) {
+        targetSocket.join(data.roomId);
+        targetSocket.emit('waiting-room:admitted', { roomId: data.roomId });
+
+        const sockets = await this.server.in(data.roomId).fetchSockets();
+        const existingUserIds = sockets.map(s => s.id).filter(id => id !== data.targetSocketId);
+
+        targetSocket.emit('all-users', existingUserIds);
+        targetSocket.to(data.roomId).emit('user-joined', { userId: data.targetSocketId, socketId: data.targetSocketId });
+      }
+
+      this.server.in(data.roomId).emit('waiting-room:updated', Array.from(waitingMap.values()));
+    }
+  }
+
+  @SubscribeMessage('host:deny-user')
+  async handleDenyUser(@MessageBody() data: { roomId: string; targetSocketId: string }, @ConnectedSocket() client: Socket) {
+    const userId = client.handshake.query.userId as string;
+    const isHost = await this.meetingService.isHost(data.roomId, userId).catch(() => false);
+    if (!isHost) {
+      client.emit('error', { message: 'Unauthorized host action' });
+      return;
+    }
+
+    const waitingMap = this.roomWaitingUsers.get(data.roomId);
+    if (waitingMap && waitingMap.has(data.targetSocketId)) {
+      waitingMap.delete(data.targetSocketId);
+      this.logger.log(`Host denied socket ${data.targetSocketId} from entering ${data.roomId}`);
+
+      const targetSocket = this.server.sockets.sockets.get(data.targetSocketId);
+      if (targetSocket) {
+        targetSocket.emit('waiting-room:denied', { message: 'Entry denied by the host.' });
+      }
+
+      this.server.in(data.roomId).emit('waiting-room:updated', Array.from(waitingMap.values()));
+    }
+  }
+
+  @SubscribeMessage('host:mute-user')
+  async handleMuteUser(@MessageBody() data: { roomId: string; targetSocketId: string }, @ConnectedSocket() client: Socket) {
+    const userId = client.handshake.query.userId as string;
+    const isHost = await this.meetingService.isHost(data.roomId, userId).catch(() => false);
+    if (!isHost) return;
+
+    this.logger.log(`Host muted socket ${data.targetSocketId} in room ${data.roomId}`);
+    this.server.to(data.targetSocketId).emit('host:muted');
+    this.server.in(data.roomId).emit('participant:muted', { socketId: data.targetSocketId });
+  }
+
+  @SubscribeMessage('host:mute-all')
+  async handleMuteAll(@MessageBody() data: { roomId: string }, @ConnectedSocket() client: Socket) {
+    const userId = client.handshake.query.userId as string;
+    const isHost = await this.meetingService.isHost(data.roomId, userId).catch(() => false);
+    if (!isHost) return;
+
+    this.logger.log(`Host triggered Mute All in room ${data.roomId}`);
+    client.to(data.roomId).emit('host:muted');
+    this.server.in(data.roomId).emit('participant:mute-all');
+  }
+
+  @SubscribeMessage('host:remove-user')
+  async handleRemoveUser(@MessageBody() data: { roomId: string; targetSocketId: string }, @ConnectedSocket() client: Socket) {
+    const userId = client.handshake.query.userId as string;
+    const isHost = await this.meetingService.isHost(data.roomId, userId).catch(() => false);
+    if (!isHost) return;
+
+    this.logger.log(`Host removed socket ${data.targetSocketId} from room ${data.roomId}`);
+    const targetSocket = this.server.sockets.sockets.get(data.targetSocketId);
+    if (targetSocket) {
+      targetSocket.emit('host:removed', { message: 'You have been removed from the meeting by the host.' });
+      targetSocket.leave(data.roomId);
+    }
+
+    this.server.in(data.roomId).emit('user-left', { userId: data.targetSocketId });
+  }
+
+  @SubscribeMessage('host:toggle-lock')
+  async handleToggleLock(@MessageBody() data: { roomId: string }, @ConnectedSocket() client: Socket) {
+    const userId = client.handshake.query.userId as string;
+    try {
+      const result = await this.meetingService.toggleLock(data.roomId, userId);
+      this.roomLockedState.set(data.roomId, result.isLocked);
+      this.logger.log(`Host toggled lock for room ${data.roomId}: isLocked=${result.isLocked}`);
+      this.server.in(data.roomId).emit('room:lock-updated', { isLocked: result.isLocked });
+    } catch (e) {
+      client.emit('error', { message: e.message || 'Failed to toggle room lock' });
+    }
+  }
+
+  @SubscribeMessage('hand:toggle')
+  handleToggleHand(@MessageBody() data: { roomId: string }, @ConnectedSocket() client: Socket) {
+    if (!this.roomRaisedHands.has(data.roomId)) {
+      this.roomRaisedHands.set(data.roomId, new Set());
+    }
+    const handSet = this.roomRaisedHands.get(data.roomId)!;
+    const isRaised = !handSet.has(client.id);
+
+    if (isRaised) {
+      handSet.add(client.id);
+    } else {
+      handSet.delete(client.id);
+    }
+
+    this.logger.log(`Socket ${client.id} toggled raised hand in ${data.roomId}: isRaised=${isRaised}`);
+    this.server.in(data.roomId).emit('hand:updated', { socketId: client.id, isHandRaised: isRaised });
   }
 
   @SubscribeMessage('leave-room')

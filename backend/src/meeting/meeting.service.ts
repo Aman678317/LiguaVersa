@@ -146,6 +146,47 @@ export class MeetingService {
     return { success: true, message: 'Invitations sent.' };
   }
 
+  async isHost(id: string, userId: string): Promise<boolean> {
+    if (!id || !userId) return false;
+    const meeting = await this.prisma.meeting.findUnique({ where: { id } });
+    return meeting ? meeting.hostId === userId : false;
+  }
+
+  async getMeetingHost(id: string): Promise<string | null> {
+    const meeting = await this.prisma.meeting.findUnique({ where: { id } });
+    return meeting ? meeting.hostId : null;
+  }
+
+  async toggleLock(id: string, userId: string): Promise<{ success: boolean; isLocked: boolean }> {
+    const isHost = await this.isHost(id, userId);
+    if (!isHost) throw new BadRequestException('Only the meeting host can lock or unlock the meeting.');
+
+    const meeting = await this.prisma.meeting.findUnique({ where: { id } });
+    if (!meeting) throw new NotFoundException('Meeting not found.');
+
+    const updated = await this.prisma.meeting.update({
+      where: { id },
+      data: { isLocked: !meeting.isLocked }
+    });
+
+    return { success: true, isLocked: updated.isLocked };
+  }
+
+  async toggleWaitingRoom(id: string, userId: string): Promise<{ success: boolean; waitingRoom: boolean }> {
+    const isHost = await this.isHost(id, userId);
+    if (!isHost) throw new BadRequestException('Only the meeting host can change waiting room settings.');
+
+    const meeting = await this.prisma.meeting.findUnique({ where: { id } });
+    if (!meeting) throw new NotFoundException('Meeting not found.');
+
+    const updated = await this.prisma.meeting.update({
+      where: { id },
+      data: { waitingRoom: !meeting.waitingRoom }
+    });
+
+    return { success: true, waitingRoom: updated.waitingRoom };
+  }
+
   async getMeetingSummary(code: string) {
     const meeting = await this.prisma.meeting.findUnique({
       where: { meetingCode: code },

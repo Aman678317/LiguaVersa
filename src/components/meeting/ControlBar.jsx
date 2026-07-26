@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Mic, MicOff, Video, VideoOff, MonitorUp, PhoneOff, MessageSquare, Users, Settings, Sparkles, Download, Circle, Square, Video as VideoIcon, Globe } from 'lucide-react';
+import { Mic, MicOff, Video, VideoOff, MonitorUp, PhoneOff, MessageSquare, Users, Settings, Sparkles, Download, Circle, Square, Video as VideoIcon, Globe, Hand, Lock, Unlock } from 'lucide-react';
 
 const ControlBar = ({ 
   isMuted, setIsMuted, 
@@ -9,7 +9,9 @@ const ControlBar = ({
   toggleSidebar, activeTab, onLeave,
   isRecording, onStartRecording, onStopRecording, onPauseRecording,
   onExportCaptions, onDownloadVideo,
-  isTranslationActive, onOpenTranslationSheet
+  isTranslationActive, onOpenTranslationSheet,
+  isHandRaised, onToggleHand,
+  isHost, isRoomLocked, onToggleLock
 }) => {
   const navigate = useNavigate();
   const { id } = useParams();
@@ -68,6 +70,29 @@ const ControlBar = ({
           >
             {isVideoOff ? <VideoOff /> : <Video />}
           </button>
+
+          <button 
+            className={`control-btn ${isHandRaised ? 'active' : ''}`}
+            onClick={onToggleHand}
+            title={isHandRaised ? "Lower Hand" : "Raise Hand"}
+            style={{
+              background: isHandRaised ? 'rgba(255, 187, 0, 0.25)' : 'rgba(255, 255, 255, 0.08)',
+              border: isHandRaised ? '1px solid #FFBB00' : '1px solid rgba(255, 255, 255, 0.15)',
+              color: isHandRaised ? '#FFBB00' : 'rgba(255, 255, 255, 0.8)'
+            }}
+          >
+            <Hand size={20} />
+          </button>
+
+          {isHost && (
+            <button 
+              className={`control-btn ${isRoomLocked ? 'danger' : ''}`}
+              onClick={onToggleLock}
+              title={isRoomLocked ? "Unlock Meeting" : "Lock Meeting (Prevent new joiners)"}
+            >
+              {isRoomLocked ? <Lock size={20} /> : <Unlock size={20} />}
+            </button>
+          )}
 
           <button 
             className={`control-btn translate-btn ${isTranslationActive ? 'active-green' : ''}`}

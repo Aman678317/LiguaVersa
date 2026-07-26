@@ -52,6 +52,14 @@ const MeetingRoom = () => {
   const [isRecording, setIsRecording] = useState(false);
   const recordingManagerRef = useRef(null);
   const captionsLogRef = useRef([]);
+
+  // Phase 1 Host Controls & Waiting Room State
+  const [isHost, setIsHost] = useState(false);
+  const [isRoomLocked, setIsRoomLocked] = useState(false);
+  const [isWaitingInRoom, setIsWaitingInRoom] = useState(false);
+  const [waitingUsers, setWaitingUsers] = useState([]);
+  const [isHandRaised, setIsHandRaised] = useState(false);
+
   
   // Translation & Subtitles State
   const [sourceLang, setSourceLang] = useState(user?.settings?.speechLanguage || 'hi-IN');
@@ -248,7 +256,62 @@ const MeetingRoom = () => {
         });
 
         setParticipants(prev => prev.map(p => p.isLocal ? { ...p, id: socketRef.current.id } : p));
-        socketRef.current.emit('join-room', { roomId: id });
+        socketRef.current.emit('join-room', { roomId: id, name: user?.profile?.firstName || user?.email || 'Guest' });
+
+        // Phase 1 Host Controls & Waiting Room Listeners
+        socketRef.current.on('room:role', (data) => {
+          setIsHost(data.isHost);
+        });
+
+        socketRef.current.on('room:waiting-holding', () => {
+          setIsWaitingInRoom(true);
+        });
+
+        socketRef.current.on('waiting-room:admitted', () => {
+          setIsWaitingInRoom(false);
+        });
+
+        socketRef.current.on('waiting-room:denied', (data) => {
+          alert(data.message || 'Entry denied by host');
+          navigate('/');
+        });
+
+        socketRef.current.on('waiting-room:updated', (list) => {
+          setWaitingUsers(list);
+        });
+
+        socketRef.current.on('room:lock-updated', (data) => {
+          setIsRoomLocked(data.isLocked);
+        });
+
+        socketRef.current.on('room:locked', (data) => {
+          alert(data.message || 'Meeting is locked by the host.');
+          navigate('/');
+        });
+
+        socketRef.current.on('host:muted', () => {
+          setIsMuted(true);
+        });
+
+        socketRef.current.on('participant:muted', (data) => {
+          setParticipants(prev => prev.map(p => p.id === data.socketId ? { ...p, muted: true } : p));
+        });
+
+        socketRef.current.on('participant:mute-all', () => {
+          setIsMuted(true);
+        });
+
+        socketRef.current.on('host:removed', (data) => {
+          alert(data.message || 'You have been removed from the meeting by the host.');
+          navigate('/');
+        });
+
+        socketRef.current.on('hand:updated', (data) => {
+          setParticipants(prev => prev.map(p => p.id === data.socketId ? { ...p, isHandRaised: data.isHandRaised } : p));
+          if (data.socketId === socketRef.current?.id) {
+            setIsHandRaised(data.isHandRaised);
+          }
+        });
 
         // New joiner receives list of existing room members and initiates WebRTC offer to each
         socketRef.current.on('all-users', (existingUsers) => {
@@ -725,6 +788,64 @@ const MeetingRoom = () => {
     exportCaptions(captionsLogRef.current.length > 0 ? captionsLogRef.current : captions, format, sourceLang);
   };
 
+  const handleToggleHand = () => {
+    socketRef.current?.emit('hand:toggle', { roomId: id });
+  };
+
+  const handleAdmitUser = (targetSocketId) => {
+    socketRef.current?.emit('host:admit-user', { roomId: id, targetSocketId });
+  };
+
+  const handleDenyUser = (targetSocketId) => {
+    socketRef.current?.emit('host:deny-user', { roomId: id, targetSocketId });
+  };
+
+  const handleMuteUser = (targetSocketId) => {
+    socketRef.current?.emit('host:mute-user', { roomId: id, targetSocketId });
+  };
+
+  const handleMuteAll = () => {
+    socketRef.current?.emit('host:mute-all', { roomId: id });
+  };
+
+  const handleRemoveUser = (targetSocketId) => {
+    socketRef.current?.emit('host:remove-user', { roomId: id, targetSocketId });
+  };
+
+  const handleToggleLock = () => {
+    socketRef.current?.emit('host:toggle-lock', { roomId: id });
+  };
+
+  if (isWaitingInRoom) {
+    return (
+      <div className="waiting-room-screen" style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        height: '100vh',
+        background: '#0F0F19',
+        color: '#fff',
+        textAlign: 'center',
+        padding: '20px'
+      }}>
+        <div style={{
+          background: 'rgba(255, 187, 0, 0.15)',
+          border: '1px solid #FFBB00',
+          borderRadius: '50%',
+          padding: '24px',
+          marginBottom: '20px'
+        }}>
+          <span style={{ fontSize: '2.5rem' }}>⏳</span>
+        </div>
+        <h2 style={{ fontSize: '1.8rem', fontWeight: 700, marginBottom: '10px' }}>Waiting for the host to admit you...</h2>
+        <p style={{ color: 'rgba(255, 255, 255, 0.6)', maxWidth: '420px', fontSize: '0.95rem', lineHeight: 1.5 }}>
+          You have connected to the waiting room for meeting <strong>{id}</strong>. The host has been notified and will let you in shortly.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="meeting-container">
       <TranslationPanel 
@@ -855,6 +976,11 @@ const MeetingRoom = () => {
             onDownloadVideo={handleDownloadVideo}
             isTranslationActive={translationEnabled}
             onOpenTranslationSheet={() => setIsLanguageSheetOpen(true)}
+            isHandRaised={isHandRaised}
+            onToggleHand={handleToggleHand}
+            isHost={isHost}
+            isRoomLocked={isRoomLocked}
+            onToggleLock={handleToggleLock}
           />
         </div>
 
@@ -873,6 +999,15 @@ const MeetingRoom = () => {
           meetingCode={id}
           token={token}
           setActiveTab={setActiveTab}
+          isHost={isHost}
+          waitingUsers={waitingUsers}
+          onAdmitUser={handleAdmitUser}
+          onDenyUser={handleDenyUser}
+          onMuteUser={handleMuteUser}
+          onMuteAll={handleMuteAll}
+          onRemoveUser={handleRemoveUser}
+          isRoomLocked={isRoomLocked}
+          onToggleLock={handleToggleLock}
         />
 
       </div>

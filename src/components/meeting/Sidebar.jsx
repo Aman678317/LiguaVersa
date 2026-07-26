@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Send, UserMinus, ToggleLeft, ToggleRight, Mic, Globe, Bot, MessageSquare, Users, Settings as SettingsIcon } from 'lucide-react';
+import { X, Send, UserMinus, ToggleLeft, ToggleRight, Mic, Globe, Bot, MessageSquare, Users, Settings as SettingsIcon, Hand, Check, MicOff, UserX, Lock, Unlock } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { VoiceRecorder } from '../chat/VoiceRecorder';
 import { SmartReplies } from '../chat/SmartReplies';
@@ -9,7 +9,7 @@ const Sidebar = ({
   isOpen, 
   activeTab, 
   onClose, 
-  participants, 
+  participants = [], 
   chatMessages = [], 
   sendMessage, 
   typingUsers = [], 
@@ -18,7 +18,16 @@ const Sidebar = ({
   requestSmartReplies,
   meetingCode,
   token,
-  setActiveTab
+  setActiveTab,
+  isHost,
+  waitingUsers = [],
+  onAdmitUser,
+  onDenyUser,
+  onMuteUser,
+  onMuteAll,
+  onRemoveUser,
+  isRoomLocked,
+  onToggleLock
 }) => {
   const [chatInput, setChatInput] = useState('');
   const messagesEndRef = useRef(null);
@@ -27,6 +36,13 @@ const Sidebar = ({
   const [autoTranslate, setAutoTranslate] = useState(true);
   const [showOriginal, setShowOriginal] = useState(true);
   const [smartReplies, setSmartReplies] = useState([]);
+
+  // Sort participants so raised-hand users are at the top
+  const sortedParticipants = [...participants].sort((a, b) => {
+    if (a.isHandRaised && !b.isHandRaised) return -1;
+    if (!a.isHandRaised && b.isHandRaised) return 1;
+    return 0;
+  });
 
   const handleSend = () => {
     if (chatInput.trim()) {
@@ -266,23 +282,117 @@ const Sidebar = ({
             )}
 
             {activeTab === 'participants' && (
-              <div className="participants-container">
-                <div className="participants-list">
-                  {participants.map(p => (
-                    <div key={p.id} className="participant-row">
-                      <div className="p-info">
-                        <div className="p-avatar">{p.name.charAt(0)}</div>
-                        <span>{p.name} {p.isLocal && '(You)'}</span>
-                      </div>
-                      {!p.isLocal && (
-                        <div className="p-actions">
-                           <UserMinus size={16} className="text-muted cursor-pointer" />
+              <div className="participants-container" style={{ display: 'flex', flexDirection: 'column', height: '100%', overflowY: 'auto' }}>
+                {/* Waiting Room Section for Host */}
+                {isHost && waitingUsers && waitingUsers.length > 0 && (
+                  <div className="waiting-room-section" style={{
+                    background: 'rgba(255, 187, 0, 0.12)',
+                    border: '1px solid rgba(255, 187, 0, 0.4)',
+                    borderRadius: '12px',
+                    padding: '12px',
+                    marginBottom: '16px'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                      <span style={{ fontWeight: 700, fontSize: '0.85rem', color: '#FFBB00' }}>
+                        Waiting Room ({waitingUsers.length})
+                      </span>
+                    </div>
+                    {waitingUsers.map(w => (
+                      <div key={w.socketId} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 0' }}>
+                        <span style={{ fontSize: '0.85rem', color: '#FFF' }}>{w.name}</span>
+                        <div style={{ display: 'flex', gap: '6px' }}>
+                          <button 
+                            onClick={() => onAdmitUser(w.socketId)}
+                            style={{
+                              background: '#00FFA3',
+                              color: '#000',
+                              border: 'none',
+                              padding: '4px 10px',
+                              borderRadius: '6px',
+                              fontSize: '0.75rem',
+                              fontWeight: 700,
+                              cursor: 'pointer'
+                            }}
+                          >
+                            Admit
+                          </button>
+                          <button 
+                            onClick={() => onDenyUser(w.socketId)}
+                            style={{
+                              background: 'rgba(255, 68, 68, 0.2)',
+                              color: '#FF4444',
+                              border: '1px solid rgba(255, 68, 68, 0.5)',
+                              padding: '4px 10px',
+                              borderRadius: '6px',
+                              fontSize: '0.75rem',
+                              fontWeight: 600,
+                              cursor: 'pointer'
+                            }}
+                          >
+                            Deny
+                          </button>
                         </div>
-                      )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="participants-list" style={{ flex: 1 }}>
+                  {sortedParticipants.map(p => (
+                    <div key={p.id} className="participant-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 4px' }}>
+                      <div className="p-info" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <div className="p-avatar">{p.name ? p.name.charAt(0) : 'U'}</div>
+                        <span style={{ fontWeight: p.isLocal ? 600 : 400 }}>
+                          {p.name} {p.isLocal && '(You)'}
+                        </span>
+                        {p.isHandRaised && (
+                          <span title="Hand Raised" style={{ fontSize: '1rem' }}>✋</span>
+                        )}
+                      </div>
+
+                      <div className="p-actions" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        {isHost && !p.isLocal && (
+                          <>
+                            <button
+                              onClick={() => onMuteUser(p.id)}
+                              title="Mute Participant"
+                              style={{ background: 'transparent', border: 'none', color: '#aaa', cursor: 'pointer' }}
+                            >
+                              <MicOff size={16} />
+                            </button>
+                            <button
+                              onClick={() => onRemoveUser(p.id)}
+                              title="Remove Participant"
+                              style={{ background: 'transparent', border: 'none', color: '#ff4444', cursor: 'pointer' }}
+                            >
+                              <UserX size={16} />
+                            </button>
+                          </>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
-                <button className="btn-secondary mute-all-btn">Mute All</button>
+
+                {isHost && (
+                  <div style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <button 
+                      className="btn-secondary mute-all-btn"
+                      onClick={onMuteAll}
+                      style={{
+                        background: 'rgba(255, 68, 68, 0.15)',
+                        border: '1px solid rgba(255, 68, 68, 0.4)',
+                        color: '#FF4444',
+                        padding: '10px',
+                        borderRadius: '10px',
+                        fontWeight: 700,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Mute All Participants
+                    </button>
+                  </div>
+                )}
               </div>
             )}
 
