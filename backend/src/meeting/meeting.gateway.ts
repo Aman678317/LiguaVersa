@@ -68,9 +68,14 @@ export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect 
   }
 
   @SubscribeMessage('join-room')
-  handleJoinRoom(@MessageBody() data: { roomId: string }, @ConnectedSocket() client: Socket) {
+  async handleJoinRoom(@MessageBody() data: { roomId: string }, @ConnectedSocket() client: Socket) {
     client.join(data.roomId);
-    client.to(data.roomId).emit('user-joined', { userId: client.id });
+
+    const sockets = await this.server.in(data.roomId).fetchSockets();
+    const existingUserIds = sockets.map(s => s.id).filter(id => id !== client.id);
+
+    client.emit('all-users', existingUserIds);
+    client.to(data.roomId).emit('user-joined', { userId: client.id, socketId: client.id });
     
     if (!this.meetingStartTimes.has(data.roomId)) {
       this.meetingStartTimes.set(data.roomId, Date.now());

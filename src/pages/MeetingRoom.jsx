@@ -241,33 +241,45 @@ const MeetingRoom = () => {
         translationVoice: targetVoice
       });
 
-      const currentStream = streamRef.current;
-      if (currentStream) {
-        setParticipants(prev => prev.map(p => p.isLocal ? { ...p, id: socketRef.current.id } : p));
-        socketRef.current.emit('join-room', { roomId: id });
+      setParticipants(prev => prev.map(p => p.isLocal ? { ...p, id: socketRef.current.id } : p));
+      socketRef.current.emit('join-room', { roomId: id });
 
-        socketRef.current.on('user-joined', (data) => {
-          const peer = createPeer(data.userId, socketRef.current.id, currentStream);
+      socketRef.current.on('all-users', (existingUsers) => {
+        const stream = streamRef.current;
+        existingUsers.forEach(userID => {
+          if (!peersRef.current.some(p => p.peerID === userID)) {
+            const peer = createPeer(userID, socketRef.current.id, stream);
+            peersRef.current.push({ peerID: userID, peer });
+          }
+        });
+      });
+
+      socketRef.current.on('user-joined', (data) => {
+        soundAudioSystem.playUserJoinSound();
+        const stream = streamRef.current;
+        if (data.userId && !peersRef.current.some(p => p.peerID === data.userId)) {
+          const peer = createPeer(data.userId, socketRef.current.id, stream);
           peersRef.current.push({ peerID: data.userId, peer });
-        });
+        }
+      });
 
-        socketRef.current.on('offer', (data) => {
-          let item = peersRef.current.find(p => p.peerID === data.callerId);
-          if (item) {
-            item.peer.signal(data.offer);
-          } else {
-            const peer = addPeer(data.offer, data.callerId, currentStream);
-            peersRef.current.push({ peerID: data.callerId, peer });
-          }
-        });
+      socketRef.current.on('offer', (data) => {
+        const stream = streamRef.current;
+        let item = peersRef.current.find(p => p.peerID === data.callerId);
+        if (item) {
+          item.peer.signal(data.offer);
+        } else {
+          const peer = addPeer(data.offer, data.callerId, stream);
+          peersRef.current.push({ peerID: data.callerId, peer });
+        }
+      });
 
-        socketRef.current.on('answer', (data) => {
-          const item = peersRef.current.find(p => p.peerID === data.callerId);
-          if (item) {
-            item.peer.signal(data.answer);
-          }
-        });
-      }
+      socketRef.current.on('answer', (data) => {
+        const item = peersRef.current.find(p => p.peerID === data.callerId);
+        if (item) {
+          item.peer.signal(data.answer);
+        }
+      });
 
         socketRef.current.on('chat-message', (data) => {
           setChatMessages(prev => [...prev, data]);
