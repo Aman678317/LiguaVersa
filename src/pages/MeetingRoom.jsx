@@ -294,7 +294,6 @@ const MeetingRoom = () => {
           }
         });
       });
-    });
 
     socketRef.current.on('disconnect', () => {
       setBackendStatus('Disconnected');
