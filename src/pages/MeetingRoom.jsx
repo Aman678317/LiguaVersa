@@ -168,6 +168,58 @@ const MeetingRoom = () => {
   }, [sourceLang, translationEnabled, targetVoice, user]);
 
   useEffect(() => {
+    const obtainUserMediaStream = async () => {
+      try {
+        return await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+        });
+      } catch (e1) {
+        try {
+          return await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        } catch (e2) {
+          try {
+            return await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
+          } catch (e3) {
+            try {
+              return await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+            } catch (e4) {
+              console.warn("Using synthetic stream fallback:", e4);
+              const ctx = new (window.AudioContext || window.webkitAudioContext)();
+              const osc = ctx.createOscillator();
+              const dst = ctx.createMediaStreamDestination();
+              osc.connect(dst);
+              osc.start();
+              const canvas = document.createElement('canvas');
+              canvas.width = 640;
+              canvas.height = 480;
+              const canvasStream = canvas.captureStream(10);
+              return new MediaStream([...canvasStream.getVideoTracks(), ...dst.stream.getAudioTracks()]);
+            }
+          }
+        }
+      }
+    };
+
+    // 1. Initialize local media stream immediately for camera display
+    obtainUserMediaStream().then((stream) => {
+      streamRef.current = stream;
+      setParticipants(prev => {
+        const hasLocal = prev.some(p => p.isLocal);
+        if (hasLocal) return prev.map(p => p.isLocal ? { ...p, stream } : p);
+        return [{
+          id: 'local',
+          name: 'You',
+          isLocal: true,
+          speaking: false,
+          muted: false,
+          videoOff: false,
+          stream: stream
+        }, ...prev];
+      });
+    });
+
+    // 2. Connect to Socket.IO backend
     socketRef.current = io(BACKEND_URL, {
       transports: ['websocket'],
     });
@@ -176,6 +228,7 @@ const MeetingRoom = () => {
     socketRef.current.on('connect', () => {
       console.log('✅ Connected to Backend!', socketRef.current.id);
       setBackendStatus('Connected to Backend');
+      soundAudioSystem.playConnectedSound();
       
       const settings = user?.settings || {};
       const targetLanguageCode = settings.translationLanguage || 'hi-IN';
@@ -187,58 +240,14 @@ const MeetingRoom = () => {
         translationEnabled,
         translationVoice: targetVoice
       });
-      
-      const obtainUserMediaStream = async () => {
-        try {
-          return await navigator.mediaDevices.getUserMedia({
-            video: true,
-            audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
-          });
-        } catch (e1) {
-          try {
-            return await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-          } catch (e2) {
-            try {
-              return await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
-            } catch (e3) {
-              try {
-                return await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-              } catch (e4) {
-                console.warn("Using synthetic stream fallback:", e4);
-                const ctx = new (window.AudioContext || window.webkitAudioContext)();
-                const osc = ctx.createOscillator();
-                const dst = ctx.createMediaStreamDestination();
-                osc.connect(dst);
-                osc.start();
-                const canvas = document.createElement('canvas');
-                canvas.width = 640;
-                canvas.height = 480;
-                const canvasStream = canvas.captureStream(10);
-                return new MediaStream([...canvasStream.getVideoTracks(), ...dst.stream.getAudioTracks()]);
-              }
-            }
-          }
-        }
-      };
 
-      obtainUserMediaStream().then((stream) => {
-        streamRef.current = stream;
-        soundAudioSystem.playConnectedSound();
-        
-        setParticipants([{
-          id: socketRef.current.id,
-          name: 'You',
-          isLocal: true,
-          speaking: false,
-          muted: false,
-          videoOff: false,
-          stream: stream
-        }]);
-
+      const currentStream = streamRef.current;
+      if (currentStream) {
+        setParticipants(prev => prev.map(p => p.isLocal ? { ...p, id: socketRef.current.id } : p));
         socketRef.current.emit('join-room', { roomId: id });
-        
+
         socketRef.current.on('user-joined', (data) => {
-          const peer = createPeer(data.userId, socketRef.current.id, stream);
+          const peer = createPeer(data.userId, socketRef.current.id, currentStream);
           peersRef.current.push({ peerID: data.userId, peer });
         });
 
@@ -247,7 +256,7 @@ const MeetingRoom = () => {
           if (item) {
             item.peer.signal(data.offer);
           } else {
-            const peer = addPeer(data.offer, data.callerId, stream);
+            const peer = addPeer(data.offer, data.callerId, currentStream);
             peersRef.current.push({ peerID: data.callerId, peer });
           }
         });
@@ -258,6 +267,7 @@ const MeetingRoom = () => {
             item.peer.signal(data.answer);
           }
         });
+      }
 
         socketRef.current.on('chat-message', (data) => {
           setChatMessages(prev => [...prev, data]);
