@@ -1,5 +1,6 @@
 import { WebSocketGateway, SubscribeMessage, MessageBody, ConnectedSocket, WebSocketServer, OnGatewayConnection, OnGatewayDisconnect } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
+import { Logger } from '@nestjs/common';
 import { ChatService } from '../chat/chat.service';
 import { CaptionService } from './caption.service';
 import { AnalyticsService } from '../analytics/analytics.service';
@@ -7,6 +8,8 @@ import * as os from 'os';
 
 @WebSocketGateway({ cors: { origin: '*' }, maxHttpBufferSize: 1e8 })
 export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect {
+  private readonly logger = new Logger(MeetingGateway.name);
+
   constructor(
     private chatService: ChatService,
     private captionService: CaptionService,
@@ -46,6 +49,7 @@ export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect 
 
   handleConnection(client: Socket) {
     const userId = client.handshake.query.userId as string;
+    this.logger.log(`Client connected: ${client.id} (userId: ${userId || 'anonymous'})`);
     if (userId) {
       this.connectedUsers.set(userId, client.id);
       this.server.emit('user-online', { userId });
@@ -54,6 +58,7 @@ export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect 
 
   handleDisconnect(client: Socket) {
     const userId = client.handshake.query.userId as string;
+    this.logger.log(`Client disconnected: ${client.id} (userId: ${userId || 'anonymous'})`);
     if (userId) {
       this.connectedUsers.delete(userId);
       this.server.emit('user-offline', { userId });
@@ -74,6 +79,8 @@ export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect 
     const sockets = await this.server.in(data.roomId).fetchSockets();
     const existingUserIds = sockets.map(s => s.id).filter(id => id !== client.id);
 
+    this.logger.log(`Socket ${client.id} joined room ${data.roomId}. Total room participants: ${sockets.length}`);
+
     client.emit('all-users', existingUserIds);
     client.to(data.roomId).emit('user-joined', { userId: client.id, socketId: client.id });
     
@@ -86,7 +93,7 @@ export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect 
       const aiServiceUrl = process.env.AI_SERVICE_URL || 'http://localhost:8000';
       const axios = require('axios');
       axios.get(`${aiServiceUrl}/health`, { timeout: 5000 }).catch(err => {
-        console.log('AI Service pre-warm ping dispatched:', err.message);
+        this.logger.debug(`AI Service pre-warm ping response: ${err.message}`);
       });
     } catch (e) {
       // Ignore pre-warm errors
@@ -96,6 +103,7 @@ export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect 
   @SubscribeMessage('leave-room')
   async handleLeaveRoom(@MessageBody() data: { roomId: string }, @ConnectedSocket() client: Socket) {
     client.leave(data.roomId);
+    this.logger.log(`Socket ${client.id} left room ${data.roomId}`);
     client.to(data.roomId).emit('user-left', { userId: client.id });
 
     const sockets = await this.server.in(data.roomId).fetchSockets();
@@ -117,16 +125,19 @@ export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect 
 
   @SubscribeMessage('offer')
   handleOffer(@MessageBody() data: { offer: any, targetUserId: string, callerId: string, roomId: string }, @ConnectedSocket() client: Socket) {
+    this.logger.log(`Relaying WebRTC offer from ${client.id} to ${data.targetUserId}`);
     client.to(data.targetUserId).emit('offer', { offer: data.offer, callerId: data.callerId });
   }
 
   @SubscribeMessage('answer')
   handleAnswer(@MessageBody() data: { answer: any, targetUserId: string, callerId: string, roomId: string }, @ConnectedSocket() client: Socket) {
+    this.logger.log(`Relaying WebRTC answer from ${client.id} to ${data.targetUserId}`);
     client.to(data.targetUserId).emit('answer', { answer: data.answer, callerId: data.callerId });
   }
 
   @SubscribeMessage('ice-candidate')
   handleIceCandidate(@MessageBody() data: { candidate: any, targetUserId: string, callerId: string, roomId: string }, @ConnectedSocket() client: Socket) {
+    this.logger.debug(`Relaying ICE candidate from ${client.id} to ${data.targetUserId}`);
     client.to(data.targetUserId).emit('ice-candidate', { candidate: data.candidate, callerId: data.callerId });
   }
 

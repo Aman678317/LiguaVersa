@@ -245,9 +245,11 @@ const MeetingRoom = () => {
       socketRef.current.emit('join-room', { roomId: id });
 
       socketRef.current.on('all-users', (existingUsers) => {
+        console.log('📡 [WebRTC] Room members found:', existingUsers);
         const stream = streamRef.current;
         existingUsers.forEach(userID => {
           if (!peersRef.current.some(p => p.peerID === userID)) {
+            console.log('🚀 [WebRTC] Initiating peer connection to existing user:', userID);
             const peer = createPeer(userID, socketRef.current.id, stream);
             peersRef.current.push({ peerID: userID, peer });
           }
@@ -255,10 +257,18 @@ const MeetingRoom = () => {
       });
 
       socketRef.current.on('user-joined', (data) => {
+        console.log('👤 [WebRTC] New participant joined room:', data.socketId);
         soundAudioSystem.playUserJoinSound();
+        const stream = streamRef.current;
+        if (stream && !peersRef.current.some(p => p.peerID === data.socketId)) {
+          console.log('🚀 [WebRTC] Triggering fresh offer for new joiner:', data.socketId);
+          const peer = createPeer(data.socketId, socketRef.current.id, stream);
+          peersRef.current.push({ peerID: data.socketId, peer });
+        }
       });
 
       socketRef.current.on('offer', (data) => {
+        console.log('📡 [WebRTC] Received offer from:', data.callerId);
         const stream = streamRef.current;
         let item = peersRef.current.find(p => p.peerID === data.callerId);
         if (item) {
@@ -270,9 +280,18 @@ const MeetingRoom = () => {
       });
 
       socketRef.current.on('answer', (data) => {
+        console.log('📡 [WebRTC] Received answer from:', data.callerId);
         const item = peersRef.current.find(p => p.peerID === data.callerId);
         if (item) {
           item.peer.signal(data.answer);
+        }
+      });
+
+      socketRef.current.on('ice-candidate', (data) => {
+        console.log('📡 [WebRTC] Received ICE candidate from:', data.callerId);
+        const item = peersRef.current.find(p => p.peerID === data.callerId);
+        if (item && item.peer) {
+          item.peer.signal(data.candidate);
         }
       });
 
@@ -322,48 +341,86 @@ const MeetingRoom = () => {
     };
   }, [id]);
 
-const ICE_SERVERS = {
-  iceServers: [
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' },
-    { urls: 'stun:stun2.l.google.com:19302' },
-    { urls: 'stun:stun3.l.google.com:19302' },
-    { urls: 'stun:stun4.l.google.com:19302' },
-    { urls: 'stun:global.stun.twilio.com:3478' },
-    { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
-    { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
-    { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' }
-  ]
-};
+  const getIceServersConfig = () => {
+    const turnUrl = import.meta.env.VITE_TURN_URL;
+    const turnUsername = import.meta.env.VITE_TURN_USERNAME;
+    const turnCredential = import.meta.env.VITE_TURN_CREDENTIAL;
+
+    const servers = [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' },
+      { urls: 'stun:stun2.l.google.com:19302' },
+      { urls: 'stun:stun3.l.google.com:19302' },
+      { urls: 'stun:stun4.l.google.com:19302' },
+      { urls: 'stun:global.stun.twilio.com:3478' }
+    ];
+
+    if (turnUrl) {
+      servers.push({
+        urls: turnUrl,
+        username: turnUsername || '',
+        credential: turnCredential || ''
+      });
+    } else {
+      servers.push(
+        { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+        { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+        { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' }
+      );
+    }
+
+    return { iceServers: servers };
+  };
 
   function createPeer(userToSignal, callerID, stream) {
     const peer = new Peer({
       initiator: true,
       trickle: true,
       stream,
-      config: ICE_SERVERS
+      config: getIceServersConfig()
     });
 
     peer.on('error', err => {
-      console.error('Peer error (initiator):', userToSignal, err);
+      console.error('❌ [WebRTC Peer Error - Initiator]:', userToSignal, err);
     });
 
     if (peer._pc) {
       peer._pc.oniceconnectionstatechange = () => {
-        console.log('ICE state (initiator):', userToSignal, peer._pc?.iceConnectionState);
+        const state = peer._pc?.iceConnectionState;
+        console.log(`📡 [WebRTC ICE State - Initiator] target=${userToSignal} state=${state}`);
+        if (state === 'failed') {
+          console.warn(`⚠️ [WebRTC ICE] Connection failed for ${userToSignal}. Check STUN/TURN server connectivity.`);
+        }
       };
     }
 
     peer.on('signal', signal => {
-      socketRef.current.emit('offer', {
-        targetUserId: userToSignal,
-        callerId: callerID,
-        offer: signal,
-        roomId: id
-      });
+      if (signal.type === 'offer') {
+        socketRef.current?.emit('offer', {
+          targetUserId: userToSignal,
+          callerId: callerID,
+          offer: signal,
+          roomId: id
+        });
+      } else if (signal.candidate) {
+        socketRef.current?.emit('ice-candidate', {
+          targetUserId: userToSignal,
+          callerId: callerID,
+          candidate: signal,
+          roomId: id
+        });
+      } else {
+        socketRef.current?.emit('offer', {
+          targetUserId: userToSignal,
+          callerId: callerID,
+          offer: signal,
+          roomId: id
+        });
+      }
     });
 
     peer.on('stream', (remoteStream) => {
+      console.log('🎥 [WebRTC] Received remote stream from initiator target:', userToSignal);
       setParticipants(prev => [...prev.filter(p => p.id !== userToSignal), {
         id: userToSignal,
         name: 'Remote User',
@@ -383,29 +440,50 @@ const ICE_SERVERS = {
       initiator: false,
       trickle: true,
       stream,
-      config: ICE_SERVERS
+      config: getIceServersConfig()
     });
 
     peer.on('error', err => {
-      console.error('Peer error (receiver):', callerID, err);
+      console.error('❌ [WebRTC Peer Error - Receiver]:', callerID, err);
     });
 
     if (peer._pc) {
       peer._pc.oniceconnectionstatechange = () => {
-        console.log('ICE state (receiver):', callerID, peer._pc?.iceConnectionState);
+        const state = peer._pc?.iceConnectionState;
+        console.log(`📡 [WebRTC ICE State - Receiver] caller=${callerID} state=${state}`);
+        if (state === 'failed') {
+          console.warn(`⚠️ [WebRTC ICE] Connection failed for caller ${callerID}. Check STUN/TURN server connectivity.`);
+        }
       };
     }
 
     peer.on('signal', signal => {
-      socketRef.current.emit('answer', {
-        targetUserId: callerID,
-        callerId: socketRef.current.id,
-        answer: signal,
-        roomId: id
-      });
+      if (signal.type === 'answer') {
+        socketRef.current?.emit('answer', {
+          targetUserId: callerID,
+          callerId: socketRef.current.id,
+          answer: signal,
+          roomId: id
+        });
+      } else if (signal.candidate) {
+        socketRef.current?.emit('ice-candidate', {
+          targetUserId: callerID,
+          callerId: socketRef.current.id,
+          candidate: signal,
+          roomId: id
+        });
+      } else {
+        socketRef.current?.emit('answer', {
+          targetUserId: callerID,
+          callerId: socketRef.current.id,
+          answer: signal,
+          roomId: id
+        });
+      }
     });
 
     peer.on('stream', (remoteStream) => {
+      console.log('🎥 [WebRTC] Received remote stream from receiver caller:', callerID);
       setParticipants(prev => [...prev.filter(p => p.id !== callerID), {
         id: callerID,
         name: 'Remote User',
