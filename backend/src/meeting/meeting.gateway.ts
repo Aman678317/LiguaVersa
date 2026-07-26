@@ -298,6 +298,7 @@ export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect 
   @SubscribeMessage('translation:start')
   handleTranslationStart(@MessageBody() data: { meetingId: string, sourceLang: string }, @ConnectedSocket() client: Socket) {
     this.activeStreams.set(client.id, { buffer: [], timer: null });
+    client.emit('translation:status', { status: 'ACTIVE', meetingId: data.meetingId });
   }
 
   @SubscribeMessage('translation:stop')
@@ -307,6 +308,13 @@ export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect 
       clearTimeout(streamSession.timer);
     }
     this.activeStreams.delete(client.id);
+    client.emit('translation:status', { status: 'STOPPED', meetingId: data.meetingId });
+  }
+
+  @SubscribeMessage('translation:status')
+  handleTranslationStatus(@MessageBody() data: { meetingId: string }, @ConnectedSocket() client: Socket) {
+    const isActive = this.activeStreams.has(client.id);
+    client.emit('translation:status', { status: isActive ? 'ACTIVE' : 'IDLE', meetingId: data.meetingId });
   }
 
   @SubscribeMessage('translation:chunk')
@@ -367,7 +375,7 @@ export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect 
             const decodedOriginalText = originalText ? Buffer.from(originalText, 'base64').toString('utf8') : originalText;
             
             if (decodedTranslatedText || decodedOriginalText) {
-               this.server.to(socket.id).emit('caption:final', {
+               const captionPayload = {
                  speakerId: isSelf ? 'You' : data.senderId,
                  sequenceId: data.sequenceId,
                  originalText: decodedOriginalText || decodedTranslatedText,
@@ -376,7 +384,9 @@ export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect 
                  sourceLang: detectedLang || data.sourceLang,
                  status: translationStatus,
                  timestamp: Date.now()
-               });
+               };
+               this.server.to(socket.id).emit('caption:final', captionPayload);
+               this.server.to(socket.id).emit('translation:caption', captionPayload);
 
                // Save caption history asynchronously
                this.captionService.saveCaptionHistory(
@@ -391,15 +401,16 @@ export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect 
             }
 
             if (!isSelf && translatedAudio && translatedAudio.length > 0) {
-               // Send TTS AUDIO ONLY TO THE SENDER SO SENDER CAN SEND VIA WEBRTC
-               this.server.to(client.id).emit('translation:audio-out', {
+               const audioPayload = {
                  senderId: data.senderId,
                  sequenceId: data.sequenceId,
                  audioData: translatedAudio,
                  translatedText: translatedText,
                  targetLang: targetLang,
                  targetSocketId: socket.id
-               });
+               };
+               this.server.to(client.id).emit('translation:audio-out', audioPayload);
+               this.server.to(client.id).emit('translation:audio', audioPayload);
             }
           }));
         } catch (err) {

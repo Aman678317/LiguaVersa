@@ -177,34 +177,58 @@ async def handle_transcribe(request: Request):
         if os.path.exists(temp_path):
             os.remove(temp_path)
 
+from vad import vad_detector
+from audio_receiver import audio_receiver
+from translator import translator_engine
+from tts_engine import tts_engine_wrapper
+from audio_streamer import audio_streamer
+from metrics import PipelineMetrics
+import time
+
 @app.post("/process-audio")
 async def process_audio(request: Request):
-    audio_data = await request.body()
+    metrics = PipelineMetrics()
+    raw_body = await request.body()
+    audio_data = audio_receiver.receive_chunk(raw_body)
     src_lang = request.headers.get("X-Source-Lang", "en-US")
     tgt_lang = request.headers.get("X-Target-Lang", "en-US")
 
+    if not audio_data or not vad_detector.is_speech(audio_data):
+        headers = {"X-Translation-Status": "ok", "X-Translation-Note": _encode_header("Silence / Non-speech detected")}
+        return audio_streamer.format_audio_response(b"", headers)
+
     if not whisper_model:
         headers = {"X-Translation-Status": "failed", "X-Translation-Error": _encode_header("Whisper model unavailable")}
-        return Response(content=b"", status_code=204, headers=headers)
+        return audio_streamer.format_audio_response(b"", headers)
 
     with tempfile.NamedTemporaryFile(suffix=".webm", delete=False) as temp_file:
         temp_path = temp_file.name
         temp_file.write(audio_data)
 
     try:
+        stt_start = time.time()
         text = await run_in_threadpool(_do_transcribe, temp_path, src_lang)
+        metrics.record_stt((time.time() - stt_start) * 1000)
 
         if not text:
-            headers = {"X-Translation-Status": "ok", "X-Translation-Note": _encode_header("No speech detected")}
-            return Response(content=b"", status_code=204, headers=headers)
+            headers = {"X-Translation-Status": "ok", "X-Translation-Note": _encode_header("No speech text recognized")}
+            return audio_streamer.format_audio_response(b"", headers)
 
-        translated_text, trans_status = await translate_text_async(text, src_lang, tgt_lang)
+        trans_start = time.time()
+        translated_text, trans_status = await translator_engine.translate(text, src_lang, tgt_lang)
+        metrics.record_translation((time.time() - trans_start) * 1000)
+
         tts_audio = b""
         tts_engine = "none"
         tts_error = ""
 
         if translated_text:
-            tts_audio, tts_engine, tts_error = await run_in_threadpool(synthesize_speech_sync, translated_text, tgt_lang)
+            tts_start = time.time()
+            tts_audio, tts_engine, tts_error = await run_in_threadpool(tts_engine_wrapper.synthesize, translated_text, tgt_lang)
+            metrics.record_tts((time.time() - tts_start) * 1000)
+
+        m_summary = metrics.finalize()
+        tts_available = "true" if (tts_audio and len(tts_audio) > 0) else "false"
 
         headers = {
             "X-Original-Text": _encode_header(text),
@@ -214,12 +238,14 @@ async def process_audio(request: Request):
             "X-Target-Lang": tgt_lang,
             "X-Translation-Status": trans_status,
             "X-TTS-Engine": tts_engine,
+            "X-TTS-Available": tts_available,
             "X-Translation-Available": "true",
+            "X-Latency-Total": str(m_summary["total_latency_ms"]),
         }
         if tts_error:
             headers["X-TTS-Error"] = _encode_header(tts_error)
 
-        return Response(content=tts_audio, media_type="application/octet-stream", headers=headers)
+        return audio_streamer.format_audio_response(tts_audio, headers)
     finally:
         if os.path.exists(temp_path):
             os.remove(temp_path)

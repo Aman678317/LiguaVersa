@@ -20,6 +20,8 @@ import { useRealTimeTranslation } from '../hooks/useRealTimeTranslation';
 import { TranslationPanel } from '../components/translation/TranslationPanel';
 import { LiveCaptions } from '../components/translation/LiveCaptions';
 import { CaptionSettings } from '../components/translation/CaptionSettings';
+import { LanguageSheet } from '../components/translation/LanguageSheet';
+import { AIStatusIndicator } from '../components/translation/AIStatusIndicator';
 
 const LANGUAGES = [
   { code: 'en-US', name: 'English' },
@@ -51,7 +53,11 @@ const MeetingRoom = () => {
   const captionsLogRef = useRef([]);
   
   // Translation & Subtitles State
-  const [sourceLang, setSourceLang] = useState(user?.settings?.speechLanguage || 'en-US');
+  const [sourceLang, setSourceLang] = useState(user?.settings?.speechLanguage || 'hi-IN');
+  const [partnerLang, setPartnerLang] = useState(user?.settings?.translationLanguage || 'en-US');
+  const [voiceGender, setVoiceGender] = useState('female');
+  const [autoDetect, setAutoDetect] = useState(true);
+  const [isLanguageSheetOpen, setIsLanguageSheetOpen] = useState(false);
   const [translationEnabled, setTranslationEnabled] = useState(user?.settings?.autoStartTranslation !== false);
   const [targetVoice, setTargetVoice] = useState('alloy');
   const [captionsEnabled, setCaptionsEnabled] = useState(true);
@@ -61,7 +67,12 @@ const MeetingRoom = () => {
     position: user?.settings?.captionPosition || 'bottom',
     color: user?.settings?.captionColor || '#ffffff',
     dualMode: user?.settings?.dualCaptionMode !== false,
-    opacity: user?.settings?.captionOpacity || 0.7
+    opacity: user?.settings?.captionOpacity || 0.7,
+    voiceSpeed: 1.0,
+    voicePitch: 1.0,
+    autoDetect: true,
+    translationQuality: 'balanced',
+    audioEnhancement: true
   });
   const [isCaptionSettingsOpen, setIsCaptionSettingsOpen] = useState(false);
   
@@ -576,28 +587,13 @@ const MeetingRoom = () => {
               >
                 Copy Invite Link
               </button>
-              <a 
-                href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`Join my LinguaVerse meeting! Link: ${window.location.href}`)}`}
-                target="_blank" rel="noopener noreferrer"
-                style={{
-                  background: '#25D366', color: 'white', padding: '6px 12px', borderRadius: '8px', 
-                  textDecoration: 'none', fontSize: '0.85rem', fontWeight: 'bold'
-                }}
-              >
-                WhatsApp
-              </a>
-              <a 
-                href={`https://t.me/share/url?url=${encodeURIComponent(window.location.href)}&text=${encodeURIComponent('Join my LinguaVerse meeting!')}`}
-                target="_blank" rel="noopener noreferrer"
-                style={{
-                  background: '#0088cc', color: 'white', padding: '6px 12px', borderRadius: '8px', 
-                  textDecoration: 'none', fontSize: '0.85rem', fontWeight: 'bold'
-                }}
-              >
-                Telegram
-              </a>
             </div>
-            <div className="meeting-badges" style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+            <div className="meeting-badges" style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+              <AIStatusIndicator 
+                isEnabled={translationEnabled} 
+                isTranslating={isTranslating} 
+                latency={latency} 
+              />
               <span style={{color: 'white', fontSize: '0.85rem'}}>My Language:</span>
               <select 
                 value={sourceLang} 
@@ -620,6 +616,24 @@ const MeetingRoom = () => {
             settings={captionSettings}
             onSettingsChange={setCaptionSettings} 
           />
+
+          <LanguageSheet 
+            isOpen={isLanguageSheetOpen}
+            onClose={() => setIsLanguageSheetOpen(false)}
+            yourLang={sourceLang}
+            setYourLang={setSourceLang}
+            partnerLang={partnerLang}
+            setPartnerLang={setPartnerLang}
+            voiceGender={voiceGender}
+            setVoiceGender={setVoiceGender}
+            autoDetect={autoDetect}
+            setAutoDetect={setAutoDetect}
+            onStartTranslation={() => {
+              setTranslationEnabled(true);
+              socketRef.current?.emit('translation:start', { meetingId: id, sourceLang });
+            }}
+            isTranslationActive={translationEnabled}
+          />
           
           <ControlBar 
             isMuted={isMuted} setIsMuted={setIsMuted}
@@ -633,6 +647,8 @@ const MeetingRoom = () => {
             onStopRecording={handleStopRecording}
             onExportCaptions={handleExportCaptions}
             onDownloadVideo={handleDownloadVideo}
+            isTranslationActive={translationEnabled}
+            onOpenTranslationSheet={() => setIsLanguageSheetOpen(true)}
           />
         </div>
 

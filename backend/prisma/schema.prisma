@@ -360,6 +360,64 @@ model SpeechHistory {
   meeting     Meeting?           @relation(fields: [meetingId], references: [id], onDelete: Cascade)
 }
 
+model TranslationSession {
+  id             String             @id @default(uuid())
+  callId         String
+  userId         String
+  sourceLanguage String             @default("Hindi")
+  targetLanguage String             @default("English")
+  status         String             @default("ACTIVE") // ACTIVE, STOPPED, FAILED
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  chunks         TranslationChunk[]
+}
+
+model TranslationChunk {
+  id             String         @id @default(uuid())
+  sessionId      String
+  speaker        String         @default("user")
+  originalText   String
+  translatedText String
+  latency        Int            @default(0) // in ms
+  createdAt      DateTime       @default(now())
+  session        TranslationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  audios         SpeechAudio[]
+}
+
+model SpeechAudio {
+  id         String           @id @default(uuid())
+  chunkId    String
+  audioUrl   String?
+  duration   Float            @default(0.0)
+  voiceModel String           @default("Piper")
+  createdAt  DateTime         @default(now())
+  chunk      TranslationChunk @relation(fields: [chunkId], references: [id], onDelete: Cascade)
+}
+
+model LanguageModel {
+  id        String   @id @default(uuid())
+  provider  String   @default("Gemini")
+  model     String   @default("gemini-1.5-flash")
+  price     Float    @default(0.0)
+  latency   Int      @default(150)
+  status    String   @default("ACTIVE")
+  createdAt DateTime @default(now())
+}
+
+model AiMetric {
+  id              String   @id @default(uuid())
+  callId          String
+  tokens          Int      @default(0)
+  characters      Int      @default(0)
+  translationTime Int      @default(0)
+  ttsTime         Int      @default(0)
+  sttTime         Int      @default(0)
+  totalLatency    Int      @default(0)
+  cost            Float    @default(0.0)
+  createdAt       DateTime @default(now())
+}
+
+
 // ---------------------------------------------------------
 // SYSTEM & BILLING
 // ---------------------------------------------------------

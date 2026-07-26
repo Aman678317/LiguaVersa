@@ -5,28 +5,29 @@ from tts_engines import synthesize_speech_sync
 logging.basicConfig(level=logging.INFO)
 
 def test_tts_engines():
-    print("--- Testing Japanese TTS ('ja-JP') ---")
-    ja_audio, ja_engine, ja_err = synthesize_speech_sync("こんにちは世界、リアルタイム翻訳テストです。", "ja-JP")
-    print(f"Japanese TTS Engine Used: {ja_engine}")
-    print(f"Japanese Audio Bytes Generated: {len(ja_audio)} bytes")
-    print(f"Error (if any): {ja_err}")
-    assert len(ja_audio) > 0, "Japanese audio synthesis failed!"
+    test_languages = [
+        ("ja-JP", "こんにちは世界、リアルタイム翻訳テストです。", "Japanese (Edge-TTS)"),
+        ("ko-KR", "안녕하세요, 실시간 번역 테스트입니다.", "Korean (Edge-TTS)"),
+        ("ar-SA", "مرحبا بكم في اختبار الترجمة المباشرة.", "Arabic (Edge-TTS)"),
+        ("hi-IN", "नमस्ते दुनिया, आपका स्वागत है।", "Hindi (Piper / Edge-TTS)"),
+        ("es-ES", "Hola mundo, prueba de traducción en vivo.", "Spanish (Piper / Edge-TTS)"),
+    ]
 
-    print("\n--- Testing Hindi TTS ('hi-IN') ---")
-    hi_audio, hi_engine, hi_err = synthesize_speech_sync("नमस्ते दुनिया, आपका स्वागत है।", "hi-IN")
-    print(f"Hindi TTS Engine Used: {hi_engine}")
-    print(f"Hindi Audio Bytes Generated: {len(hi_audio)} bytes")
-    print(f"Error (if any): {hi_err}")
-    assert len(hi_audio) > 0, "Hindi audio synthesis failed!"
+    print("=== STARTING MULTI-LANGUAGE TTS SUITE ===")
+    for lang_code, text, label in test_languages:
+        print(f"\n--- Testing {label} ('{lang_code}') ---")
+        audio, engine, err = synthesize_speech_sync(text, lang_code)
+        print(f"Engine Used: {engine}")
+        print(f"Audio Bytes Output: {len(audio)} bytes")
+        print(f"Error (if any): {err}")
+        assert len(audio) > 0, f"Audio synthesis failed for {lang_code}!"
 
-    print("\n--- Testing English TTS ('en-US') ---")
-    en_audio, en_engine, en_err = synthesize_speech_sync("Hello world, live call translation test.", "en-US")
-    print(f"English TTS Engine Used: {en_engine}")
-    print(f"English Audio Bytes Generated: {len(en_audio)} bytes")
-    print(f"Error (if any): {en_err}")
-    assert len(en_audio) > 0, "English audio synthesis failed!"
+    print("\n--- Testing Failure Signaling for Empty Text ---")
+    empty_audio, empty_engine, empty_err = synthesize_speech_sync("", "ja-JP")
+    print(f"Empty Audio Output: {len(empty_audio)} bytes (Expected: 0)")
+    assert len(empty_audio) == 0, "Empty text should return 0 bytes!"
 
-    print("\n[SUCCESS] All TTS tests passed successfully!")
+    print("\n[SUCCESS] All multi-language TTS engine tests passed successfully!")
 
 if __name__ == "__main__":
     test_tts_engines()

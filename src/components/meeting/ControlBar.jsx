@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Mic, MicOff, Video, VideoOff, MonitorUp, PhoneOff, MessageSquare, Users, Settings, Sparkles, Download, Circle, Square, Video as VideoIcon } from 'lucide-react';
+import { Mic, MicOff, Video, VideoOff, MonitorUp, PhoneOff, MessageSquare, Users, Settings, Sparkles, Download, Circle, Square, Video as VideoIcon, Globe } from 'lucide-react';
 
 const ControlBar = ({ 
   isMuted, setIsMuted, 
@@ -8,7 +8,8 @@ const ControlBar = ({
   isScreenSharing, toggleScreenShare, 
   toggleSidebar, activeTab, onLeave,
   isRecording, onStartRecording, onStopRecording, onPauseRecording,
-  onExportCaptions, onDownloadVideo
+  onExportCaptions, onDownloadVideo,
+  isTranslationActive, onOpenTranslationSheet
 }) => {
   const navigate = useNavigate();
   const { id } = useParams();
@@ -66,6 +67,29 @@ const ControlBar = ({
             title={isVideoOff ? "Turn On Camera" : "Turn Off Camera"}
           >
             {isVideoOff ? <VideoOff /> : <Video />}
+          </button>
+
+          <button 
+            className={`control-btn translate-btn ${isTranslationActive ? 'active-green' : ''}`}
+            onClick={onOpenTranslationSheet}
+            title="Translate AI"
+            style={{
+              background: isTranslationActive ? 'rgba(0, 255, 163, 0.2)' : 'rgba(255, 255, 255, 0.08)',
+              border: isTranslationActive ? '1px solid #00FFA3' : '1px solid rgba(255, 255, 255, 0.15)',
+              color: isTranslationActive ? '#00FFA3' : 'rgba(255, 255, 255, 0.7)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '0 14px',
+              borderRadius: '24px',
+              fontWeight: 700,
+              fontSize: '0.85rem',
+              boxShadow: isTranslationActive ? '0 0 15px rgba(0, 255, 163, 0.35)' : 'none',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            <Globe size={18} />
+            <span>Translate</span>
           </button>
           
           <button 

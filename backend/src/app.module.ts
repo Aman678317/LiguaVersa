@@ -10,6 +10,7 @@ import { ChatModule } from './chat/chat.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { AdminModule } from './admin/admin.module';
 import { HealthModule } from './health/health.module';
+import { TranslationModule } from './translation/translation.module';
 import { ThrottlerModule } from '@nestjs/throttler';
 
 @Module({
@@ -27,7 +28,8 @@ import { ThrottlerModule } from '@nestjs/throttler';
     ChatModule, 
     AnalyticsModule, 
     AdminModule,
-    HealthModule
+    HealthModule,
+    TranslationModule
   ],
   controllers: [AppController],
   providers: [],
