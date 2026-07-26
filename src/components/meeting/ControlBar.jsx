@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Mic, MicOff, Video, VideoOff, MonitorUp, PhoneOff, MessageSquare, Users, Settings, Sparkles, Download, Circle, Square, Video as VideoIcon, Globe, Hand, Lock, Unlock } from 'lucide-react';
+import { Mic, MicOff, Video, VideoOff, MonitorUp, PhoneOff, MessageSquare, Users, Settings, Sparkles, Download, Circle, Square, Video as VideoIcon, Globe, Hand, Lock, Unlock, LayoutGrid, Maximize2 } from 'lucide-react';
 
 const ControlBar = ({ 
   isMuted, setIsMuted, 
@@ -11,7 +11,8 @@ const ControlBar = ({
   onExportCaptions, onDownloadVideo,
   isTranslationActive, onOpenTranslationSheet,
   isHandRaised, onToggleHand,
-  isHost, isRoomLocked, onToggleLock
+  isHost, isRoomLocked, onToggleLock,
+  layoutMode, onToggleLayoutMode
 }) => {
   const navigate = useNavigate();
   const { id } = useParams();
@@ -116,11 +117,24 @@ const ControlBar = ({
             <Globe size={18} />
             <span>Translate</span>
           </button>
+
+          <button 
+            className="control-btn"
+            onClick={onToggleLayoutMode}
+            title={layoutMode === 'speaker' ? "Switch to Gallery View" : "Switch to Speaker View"}
+          >
+            {layoutMode === 'speaker' ? <LayoutGrid size={20} /> : <Maximize2 size={20} />}
+          </button>
           
           <button 
             className={`control-btn ${isScreenSharing ? 'active' : ''}`}
             onClick={toggleScreenShare}
             title={isScreenSharing ? "Stop Screen Share" : "Share Screen"}
+            style={{
+              background: isScreenSharing ? 'rgba(0, 255, 163, 0.25)' : undefined,
+              border: isScreenSharing ? '1px solid #00FFA3' : undefined,
+              color: isScreenSharing ? '#00FFA3' : undefined
+            }}
           >
             <MonitorUp />
           </button>

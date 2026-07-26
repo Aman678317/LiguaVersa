@@ -296,6 +296,12 @@ export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect 
     this.server.in(data.roomId).emit('hand:updated', { socketId: client.id, isHandRaised: isRaised });
   }
 
+  @SubscribeMessage('screen-share:status')
+  handleScreenShareStatus(@MessageBody() data: { roomId: string; isSharing: boolean }, @ConnectedSocket() client: Socket) {
+    this.logger.log(`Socket ${client.id} screen share status in ${data.roomId}: isSharing=${data.isSharing}`);
+    this.server.in(data.roomId).emit('screen-share:updated', { socketId: client.id, isSharing: data.isSharing });
+  }
+
   @SubscribeMessage('leave-room')
   async handleLeaveRoom(@MessageBody() data: { roomId: string }, @ConnectedSocket() client: Socket) {
     client.leave(data.roomId);

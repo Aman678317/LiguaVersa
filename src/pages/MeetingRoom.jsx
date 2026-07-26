@@ -60,6 +60,12 @@ const MeetingRoom = () => {
   const [waitingUsers, setWaitingUsers] = useState([]);
   const [isHandRaised, setIsHandRaised] = useState(false);
 
+  // Phase 2 Layout & Pinning State
+  const [layoutMode, setLayoutMode] = useState(() => localStorage.getItem('linguaversa_layout_mode') || 'gallery');
+  const [pinnedParticipantId, setPinnedParticipantId] = useState(null);
+  const cameraVideoTrackRef = useRef(null);
+
+
   
   // Translation & Subtitles State
   const [sourceLang, setSourceLang] = useState(user?.settings?.speechLanguage || 'hi-IN');
@@ -311,6 +317,11 @@ const MeetingRoom = () => {
           if (data.socketId === socketRef.current?.id) {
             setIsHandRaised(data.isHandRaised);
           }
+        });
+
+        socketRef.current.on('screen-share:updated', (data) => {
+          console.log(`🖥️ Screen share update for ${data.socketId}: isSharing=${data.isSharing}`);
+          setParticipants(prev => prev.map(p => p.id === data.socketId ? { ...p, isScreenSharing: data.isSharing } : p));
         });
 
         // New joiner receives list of existing room members and initiates WebRTC offer to each
@@ -619,7 +630,6 @@ const MeetingRoom = () => {
       sourceLang: sourceLangRef.current
     });
   };
-
   const handleRequestSmartReplies = async () => {
     // Mocking smart replies based on last message for Phase 5 prototype
     const lastMsg = chatMessages[chatMessages.length - 1]?.message || '';
@@ -627,27 +637,46 @@ const MeetingRoom = () => {
     return ['Sounds good!', 'Got it.', 'Thanks!'];
   };
 
+  const handleToggleLayoutMode = () => {
+    const newMode = layoutMode === 'speaker' ? 'gallery' : 'speaker';
+    setLayoutMode(newMode);
+    localStorage.setItem('linguaversa_layout_mode', newMode);
+  };
+
+  const handleTogglePin = (participantId) => {
+    setPinnedParticipantId(prev => prev === participantId ? null : participantId);
+  };
+
   const toggleScreenShare = async () => {
     if (!isScreenSharing) {
       try {
-        const screenStream = await navigator.mediaDevices.getDisplayMedia({ cursor: true });
+        const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
         screenStreamRef.current = screenStream;
         
-        const videoTrack = streamRef.current.getVideoTracks()[0];
+        const cameraTrack = streamRef.current ? streamRef.current.getVideoTracks()[0] : null;
+        cameraVideoTrackRef.current = cameraTrack;
         const screenTrack = screenStream.getVideoTracks()[0];
         
         peersRef.current.forEach(item => {
-          item.peer.replaceTrack(videoTrack, screenTrack, streamRef.current);
+          if (item.peer && cameraTrack && screenTrack) {
+            try {
+              item.peer.replaceTrack(cameraTrack, screenTrack, streamRef.current);
+            } catch (e) {
+              console.warn("Could not replace track on peer:", item.peerID, e);
+            }
+          }
         });
         
-        setParticipants(prev => prev.map(p => p.isLocal ? { ...p, stream: screenStream } : p));
+        setParticipants(prev => prev.map(p => p.isLocal ? { ...p, stream: screenStream, isLocalScreenSharing: true } : p));
         setIsScreenSharing(true);
+
+        socketRef.current?.emit('screen-share:status', { roomId: id, isSharing: true });
 
         screenTrack.onended = () => {
           stopScreenShare();
         };
       } catch (err) {
-        console.error("Failed to share screen:", err);
+        console.error("Failed to start screen share:", err);
       }
     } else {
       stopScreenShare();
@@ -660,16 +689,25 @@ const MeetingRoom = () => {
       screenStreamRef.current = null;
     }
     
-    const videoTrack = streamRef.current.getVideoTracks()[0];
+    const cameraTrack = cameraVideoTrackRef.current || (streamRef.current ? streamRef.current.getVideoTracks()[0] : null);
     peersRef.current.forEach(item => {
-      const screenTrack = item.peer._pc.getSenders().find(s => s.track.kind === 'video').track;
-      if (screenTrack && videoTrack) {
-        item.peer.replaceTrack(screenTrack, videoTrack, streamRef.current);
+      if (item.peer && cameraTrack) {
+        try {
+          const senders = item.peer._pc ? item.peer._pc.getSenders() : [];
+          const videoSender = senders.find(s => s.track && s.track.kind === 'video');
+          if (videoSender && videoSender.track) {
+            item.peer.replaceTrack(videoSender.track, cameraTrack, streamRef.current);
+          }
+        } catch (e) {
+          console.warn("Could not revert track on peer:", item.peerID, e);
+        }
       }
     });
-
-    setParticipants(prev => prev.map(p => p.isLocal ? { ...p, stream: streamRef.current } : p));
+    
+    setParticipants(prev => prev.map(p => p.isLocal ? { ...p, stream: streamRef.current, isLocalScreenSharing: false } : p));
     setIsScreenSharing(false);
+
+    socketRef.current?.emit('screen-share:status', { roomId: id, isSharing: false });
   };
 
   useEffect(() => {
@@ -923,7 +961,13 @@ const MeetingRoom = () => {
           </div>
 
           {/* WebRTC Video component handles audio context ducking globally */}
-          <VideoGrid participants={participants} translationEnabled={translationEnabled} />
+          <VideoGrid 
+            participants={participants} 
+            translationEnabled={translationEnabled}
+            layoutMode={layoutMode}
+            pinnedParticipantId={pinnedParticipantId}
+            onTogglePin={handleTogglePin}
+          />
           
           <LiveCaptions captions={captions} isEnabled={captionsEnabled} settings={captionSettings} />
           
@@ -981,6 +1025,8 @@ const MeetingRoom = () => {
             isHost={isHost}
             isRoomLocked={isRoomLocked}
             onToggleLock={handleToggleLock}
+            layoutMode={layoutMode}
+            onToggleLayoutMode={handleToggleLayoutMode}
           />
         </div>
 
