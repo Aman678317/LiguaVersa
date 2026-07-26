@@ -188,8 +188,16 @@ const MeetingRoom = () => {
         translationVoice: targetVoice
       });
       
-      navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then((stream) => {
+      navigator.mediaDevices.getUserMedia({ 
+        video: true, 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        } 
+      }).then((stream) => {
         streamRef.current = stream;
+        soundAudioSystem.playConnectedSound();
         
         setParticipants([{
           id: socketRef.current.id,
@@ -481,6 +489,7 @@ const MeetingRoom = () => {
   };
 
   const handleLeave = async () => {
+    soundAudioSystem.playDisconnectSound();
     const duration = Math.floor((Date.now() - startTime.current) / 1000);
     try {
       await fetch(`${BACKEND_URL}/history/end`, {

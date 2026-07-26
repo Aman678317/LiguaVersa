@@ -1,16 +1,41 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Phone, PhoneOff, Video } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { soundAudioSystem } from '../utils/SoundAudioSystem';
 
 const IncomingCallModal = ({ invitation, onAccept, onDecline }) => {
   const navigate = useNavigate();
 
+  useEffect(() => {
+    if (invitation) {
+      soundAudioSystem.startRingtone();
+      const timer = setTimeout(() => {
+        soundAudioSystem.stopRingtone();
+        soundAudioSystem.playDisconnectSound();
+        if (onDecline) onDecline();
+      }, 30000); // 30 second call timeout -> missed call
+
+      return () => {
+        clearTimeout(timer);
+        soundAudioSystem.stopRingtone();
+      };
+    }
+  }, [invitation, onDecline]);
+
   if (!invitation) return null;
 
   const handleAccept = () => {
+    soundAudioSystem.stopRingtone();
+    soundAudioSystem.playConnectedSound();
     onAccept();
     navigate(`/meet/${invitation.meetingCode}`);
+  };
+
+  const handleDecline = () => {
+    soundAudioSystem.stopRingtone();
+    soundAudioSystem.playDisconnectSound();
+    onDecline();
   };
 
   return (
@@ -60,7 +85,7 @@ const IncomingCallModal = ({ invitation, onAccept, onDecline }) => {
 
             <div style={{ display: 'flex', gap: '20px', justifyContent: 'center' }}>
               <button 
-                onClick={onDecline}
+                onClick={handleDecline}
                 style={{
                   width: '60px', height: '60px', borderRadius: '50%', background: '#FF4444',
                   border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',

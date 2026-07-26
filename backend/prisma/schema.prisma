@@ -670,3 +670,34 @@ model MeetingSummary {
 
   meeting     Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
 }
+
+model CallSession {
+  id          String      @id @default(uuid())
+  callerId    String
+  receiverId  String
+  status      String      @default("RINGING") // RINGING, CONNECTED, REJECTED, MISSED, ENDED
+  startedAt   DateTime?
+  endedAt     DateTime?
+  duration    Int         @default(0) // in seconds
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  events      CallEvent[]
+}
+
+model CallEvent {
+  id        String      @id @default(uuid())
+  callId    String
+  event     String      // incoming, ringing, connected, rejected, missed, ended
+  timestamp DateTime    @default(now())
+  session   CallSession @relation(fields: [callId], references: [id], onDelete: Cascade)
+}
+
+model AudioChunk {
+  id         String   @id @default(uuid())
+  chunkId    String
+  duration   Float    @default(0.0)
+  sampleRate Int      @default(16000)
+  codec      String   @default("opus")
+  createdAt  DateTime @default(now())
+}
+

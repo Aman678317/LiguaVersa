@@ -11,6 +11,8 @@ import { AnalyticsModule } from './analytics/analytics.module';
 import { AdminModule } from './admin/admin.module';
 import { HealthModule } from './health/health.module';
 import { TranslationModule } from './translation/translation.module';
+import { CallModule } from './call/call.module';
+import { AudioModule } from './audio/audio.module';
 import { ThrottlerModule } from '@nestjs/throttler';
 
 @Module({
@@ -29,7 +31,9 @@ import { ThrottlerModule } from '@nestjs/throttler';
     AnalyticsModule, 
     AdminModule,
     HealthModule,
-    TranslationModule
+    TranslationModule,
+    CallModule,
+    AudioModule
   ],
   controllers: [AppController],
   providers: [],

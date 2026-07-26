@@ -133,16 +133,37 @@ export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect 
       callerName: data.callerName,
       roomId: data.roomId 
     });
+    client.to(data.targetUserId).emit('call:incoming', { 
+      callerId: data.callerId, 
+      callerName: data.callerName,
+      roomId: data.roomId 
+    });
+  }
+
+  @SubscribeMessage('call:ringing')
+  handleCallRinging(@MessageBody() data: { targetUserId: string, roomId: string }, @ConnectedSocket() client: Socket) {
+    client.to(data.targetUserId).emit('call:ringing', { roomId: data.roomId });
   }
 
   @SubscribeMessage('accept-ai-call')
   handleAcceptAiCall(@MessageBody() data: { targetUserId: string, roomId: string }, @ConnectedSocket() client: Socket) {
     client.to(data.targetUserId).emit('ai-call-accepted', { roomId: data.roomId });
+    client.to(data.targetUserId).emit('call:accepted', { roomId: data.roomId });
+  }
+
+  @SubscribeMessage('call:connected')
+  handleCallConnected(@MessageBody() data: { roomId: string }, @ConnectedSocket() client: Socket) {
+    this.server.in(data.roomId).emit('call:connected', { roomId: data.roomId, timestamp: Date.now() });
   }
 
   @SubscribeMessage('reject-ai-call')
   handleRejectAiCall(@MessageBody() data: { targetUserId: string }, @ConnectedSocket() client: Socket) {
     client.to(data.targetUserId).emit('ai-call-rejected');
+  }
+
+  @SubscribeMessage('call:ended')
+  handleCallEnded(@MessageBody() data: { roomId: string }, @ConnectedSocket() client: Socket) {
+    this.server.in(data.roomId).emit('call:ended', { roomId: data.roomId, timestamp: Date.now() });
   }
 
   @SubscribeMessage('set-language')

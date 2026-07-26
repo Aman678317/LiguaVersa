@@ -7,6 +7,9 @@ export class SoundAudioSystem {
     this.masterVolume = 1.0;
     this.isMuted = false;
     this.initialized = false;
+    
+    this.ringtoneInterval = null;
+    this.ringbackInterval = null;
   }
 
   init() {
@@ -43,7 +46,165 @@ export class SoundAudioSystem {
     }
   }
 
-  // --- UI Sound Effect Cues ---
+  // --- Call Ringtones & Tones ---
+
+  startRingtone() {
+    this.stopRingtone();
+    this.ensureContext();
+    if (!this.audioContext || this.isMuted) return;
+
+    const playPulse = () => {
+      try {
+        const now = this.audioContext.currentTime;
+        const osc1 = this.audioContext.createOscillator();
+        const osc2 = this.audioContext.createOscillator();
+        const gain = this.audioContext.createGain();
+
+        osc1.type = 'sine';
+        osc2.type = 'sine';
+        osc1.frequency.setValueAtTime(440, now);
+        osc2.frequency.setValueAtTime(480, now);
+
+        gain.gain.setValueAtTime(0, now);
+        gain.gain.linearRampToValueAtTime(0.2, now + 0.1);
+        gain.gain.setValueAtTime(0.2, now + 1.2);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 1.5);
+
+        osc1.connect(gain);
+        osc2.connect(gain);
+        gain.connect(this.masterGain);
+
+        osc1.start(now);
+        osc2.start(now);
+        osc1.stop(now + 1.5);
+        osc2.stop(now + 1.5);
+      } catch (e) {
+        console.warn("Ringtone pulse error:", e);
+      }
+    };
+
+    playPulse();
+    this.ringtoneInterval = setInterval(playPulse, 2500);
+
+    // Mobile vibration if supported
+    if (navigator.vibrate) {
+      navigator.vibrate([800, 400, 800, 400, 800]);
+    }
+  }
+
+  stopRingtone() {
+    if (this.ringtoneInterval) {
+      clearInterval(this.ringtoneInterval);
+      this.ringtoneInterval = null;
+    }
+    if (navigator.vibrate) {
+      navigator.vibrate(0);
+    }
+  }
+
+  playRingbackTone() {
+    this.stopRingbackTone();
+    this.ensureContext();
+    if (!this.audioContext || this.isMuted) return;
+
+    const playRingback = () => {
+      try {
+        const now = this.audioContext.currentTime;
+        const osc1 = this.audioContext.createOscillator();
+        const osc2 = this.audioContext.createOscillator();
+        const gain = this.audioContext.createGain();
+
+        osc1.type = 'sine';
+        osc2.type = 'sine';
+        osc1.frequency.setValueAtTime(440, now);
+        osc2.frequency.setValueAtTime(480, now);
+
+        gain.gain.setValueAtTime(0, now);
+        gain.gain.linearRampToValueAtTime(0.12, now + 0.1);
+        gain.gain.setValueAtTime(0.12, now + 1.8);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 2.0);
+
+        osc1.connect(gain);
+        osc2.connect(gain);
+        gain.connect(this.masterGain);
+
+        osc1.start(now);
+        osc2.start(now);
+        osc1.stop(now + 2.0);
+        osc2.stop(now + 2.0);
+      } catch (e) {
+        console.warn("Ringback error:", e);
+      }
+    };
+
+    playRingback();
+    this.ringbackInterval = setInterval(playRingback, 4000);
+  }
+
+  stopRingbackTone() {
+    if (this.ringbackInterval) {
+      clearInterval(this.ringbackInterval);
+      this.ringbackInterval = null;
+    }
+  }
+
+  playConnectedSound() {
+    this.stopRingtone();
+    this.stopRingbackTone();
+    this.ensureContext();
+    if (!this.audioContext || this.isMuted) return;
+
+    try {
+      const now = this.audioContext.currentTime;
+      const osc = this.audioContext.createOscillator();
+      const gain = this.audioContext.createGain();
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(523.25, now); // C5
+      osc.frequency.setValueAtTime(659.25, now + 0.12); // E5
+      osc.frequency.setValueAtTime(783.99, now + 0.24); // G5
+
+      gain.gain.setValueAtTime(0, now);
+      gain.gain.linearRampToValueAtTime(0.25, now + 0.05);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+
+      osc.connect(gain);
+      gain.connect(this.masterGain);
+
+      osc.start(now);
+      osc.stop(now + 0.5);
+    } catch (e) {
+      console.warn("Connected sound error:", e);
+    }
+  }
+
+  playDisconnectSound() {
+    this.stopRingtone();
+    this.stopRingbackTone();
+    this.ensureContext();
+    if (!this.audioContext || this.isMuted) return;
+
+    try {
+      const now = this.audioContext.currentTime;
+      const osc = this.audioContext.createOscillator();
+      const gain = this.audioContext.createGain();
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(587.33, now); // D5
+      osc.frequency.exponentialRampToValueAtTime(293.66, now + 0.3); // D4
+
+      gain.gain.setValueAtTime(0.2, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+
+      osc.connect(gain);
+      gain.connect(this.masterGain);
+
+      osc.start(now);
+      osc.stop(now + 0.35);
+    } catch (e) {
+      console.warn("Disconnect sound error:", e);
+    }
+  }
 
   playTranslationStartSound() {
     this.ensureContext();
@@ -159,7 +320,6 @@ export class SoundAudioSystem {
     }
   }
 
-  // --- Audio Ducking ---
   duckOriginal(duckVolume = 0.15, durationMs = 3000) {
     this.ensureContext();
     if (!this.audioContext || !this.duckingGain) return;
@@ -174,7 +334,6 @@ export class SoundAudioSystem {
     }, durationMs);
   }
 
-  // --- Device Enumeration ---
   async getAudioDevices() {
     try {
       const devices = await navigator.mediaDevices.enumerateDevices();
