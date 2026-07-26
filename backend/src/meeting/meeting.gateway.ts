@@ -409,8 +409,12 @@ export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect 
                  targetLang: targetLang,
                  targetSocketId: socket.id
                };
+               // 1. Emit to target listener socket for immediate WebAudio playback
+               this.server.to(socket.id).emit('translation:audio-in', audioPayload);
+               this.server.to(socket.id).emit('translation:audio', audioPayload);
+
+               // 2. Emit to sender socket for WebRTC track injection & local feedback
                this.server.to(client.id).emit('translation:audio-out', audioPayload);
-               this.server.to(client.id).emit('translation:audio', audioPayload);
             }
           }));
         } catch (err) {

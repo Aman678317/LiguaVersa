@@ -60,14 +60,57 @@ export const useRealTimeTranslation = (socket, roomId, userId, sourceLang, isEna
       }
     };
 
+    // Play raw audio bytes directly through Web Audio API
+    const playAudioBuffer = async (rawAudio) => {
+      try {
+        if (!audioContextRef.current) return;
+        if (audioContextRef.current.state === 'suspended') {
+          await audioContextRef.current.resume();
+        }
+
+        const buffer = Array.isArray(rawAudio)
+          ? new Uint8Array(rawAudio).buffer
+          : (rawAudio.buffer || rawAudio);
+
+        audioContextRef.current.decodeAudioData(buffer.slice(0), (audioBuffer) => {
+          const source = audioContextRef.current.createBufferSource();
+          source.buffer = audioBuffer;
+          source.connect(audioContextRef.current.destination);
+          source.start(0);
+        }, (err) => {
+          // Fallback: Blob URL HTML Audio element
+          const blob = new Blob([buffer], { type: 'audio/wav' });
+          const url = URL.createObjectURL(blob);
+          const audio = new Audio(url);
+          audio.play().catch(e => console.warn("Audio play fallback failed:", e));
+        });
+      } catch (e) {
+        console.error("Failed to play audio buffer:", e);
+      }
+    };
+
+    const handleAudioIn = async (data) => {
+      try {
+        const rawAudio = data.audioData?.data || data.audioData;
+        if (rawAudio && rawAudio.length > 0) {
+          await playAudioBuffer(rawAudio);
+        }
+        if (synchronizerRef.current && data.sequenceId) {
+          synchronizerRef.current.syncAndDisplay(data.sequenceId);
+        }
+      } catch (e) {
+        console.error("Audio in playback error:", e);
+      }
+    };
+
     const handleAudioOut = async (data) => {
       if (!audioContextRef.current) return;
       
       try {
-        const rawAudio = data.audioData.data || data.audioData;
+        const rawAudio = data.audioData?.data || data.audioData;
         if (!rawAudio || rawAudio.length === 0) return;
 
-        // If we are the sender, we need to build the WebRTC track
+        // If we are the sender, build WebRTC track for remote peer
         if (data.senderId === userId) {
           const targetSocketId = data.targetSocketId;
           
@@ -75,7 +118,6 @@ export const useRealTimeTranslation = (socket, roomId, userId, sourceLang, isEna
             const builder = new AudioStreamBuilder(audioContextRef.current);
             streamBuildersRef.current[targetSocketId] = builder;
             
-            // Notify MeetingRoom that a new translated track is ready for this peer
             const stream = builder.getStream();
             const track = stream.getAudioTracks()[0];
             window.dispatchEvent(new CustomEvent('translation:track-ready', { 
@@ -86,23 +128,26 @@ export const useRealTimeTranslation = (socket, roomId, userId, sourceLang, isEna
           const builder = streamBuildersRef.current[targetSocketId];
           await builder.addAudioChunk(rawAudio);
 
-          // Trigger synchronized caption display
           if (synchronizerRef.current) {
             synchronizerRef.current.syncAndDisplay(data.sequenceId);
           }
         }
       } catch (e) {
-        console.error("Audio playback error:", e);
+        console.error("Audio out track error:", e);
       }
     };
 
     socket.on('caption:partial', handlePartial);
     socket.on('caption:final', handleFinal);
+    socket.on('translation:audio-in', handleAudioIn);
+    socket.on('translation:audio', handleAudioIn);
     socket.on('translation:audio-out', handleAudioOut);
 
     return () => {
       socket.off('caption:partial', handlePartial);
       socket.off('caption:final', handleFinal);
+      socket.off('translation:audio-in', handleAudioIn);
+      socket.off('translation:audio', handleAudioIn);
       socket.off('translation:audio-out', handleAudioOut);
     };
   }, [socket, isEnabled, userId]);
