@@ -9,12 +9,22 @@ from abc import ABC, abstractmethod
 
 logger = logging.getLogger(__name__)
 
-# Piper Voice Mapping
+# Piper Voice Candidates Mapping
+PIPER_VOICE_CANDIDATES = {
+    "en": ["en_US-lessac-medium"],
+    "es": ["es_ES-davefx-medium"],
+    "fr": ["fr_FR-siwis-medium"],
+    "hi": ["hi_IN-pratham-medium", "hi_IN-priyamvada-medium"],
+    "zh": ["zh_CN-huayan-medium"],
+    "de": ["de_DE-thorsten-medium"],
+    "default": ["en_US-lessac-medium"]
+}
+
 PIPER_VOICES = {
     "en": "en_US-lessac-medium",
     "es": "es_ES-davefx-medium",
     "fr": "fr_FR-siwis-medium",
-    "hi": "hi_IN-swara-medium",
+    "hi": "hi_IN-pratham-medium",
 }
 
 # Edge-TTS Neural Voice Mapping (covers 20+ CALL_LANGUAGES)
@@ -49,10 +59,10 @@ LANGUAGE_ENGINE_MAP = {
     "en": {"primary": "piper", "voice": "en_US-lessac-medium"},
     "es": {"primary": "piper", "voice": "es_ES-davefx-medium"},
     "fr": {"primary": "piper", "voice": "fr_FR-siwis-medium"},
-    "hi": {"primary": "piper", "voice": "hi_IN-swara-medium"},
+    "hi": {"primary": "piper", "voice": "hi_IN-pratham-medium"},
     "ja": {"primary": "edge-tts", "voice": "ja-JP-NanamiNeural"},
     "ko": {"primary": "edge-tts", "voice": "ko-KR-SunHiNeural"},
-    "zh": {"primary": "edge-tts", "voice": "zh-CN-XiaoxiaoNeural"},
+    "zh": {"primary": "piper", "voice": "zh_CN-huayan-medium"},
     "ar": {"primary": "edge-tts", "voice": "ar-SA-ZariyahNeural"},
     "de": {"primary": "edge-tts", "voice": "de-DE-KatjaNeural"},
     "mr": {"primary": "edge-tts", "voice": "mr-IN-AarohiNeural"},
@@ -124,37 +134,50 @@ class TTSEngine(ABC):
 class PiperEngine(TTSEngine):
     """Local Piper TTS Engine (restricted to languages with pre-downloaded models)."""
 
-    def __init__(self, voices: dict[str, str] = PIPER_VOICES):
-        self.voices = voices
+    def __init__(self, voice_candidates: dict[str, list[str]] = PIPER_VOICE_CANDIDATES):
+        self.voice_candidates = voice_candidates
 
     def can_handle(self, lang_code: str) -> bool:
         iso = lang_code.split("-")[0].lower()
-        return iso in self.voices and shutil.which("piper") is not None
+        return iso in self.voice_candidates and shutil.which("piper") is not None
+
+    def synthesize_with_meta(self, text: str, lang_code: str) -> tuple[bytes, str]:
+        iso = lang_code.split("-")[0].lower()
+        candidates = self.voice_candidates.get(iso, self.voice_candidates.get("default", []))
+        if not candidates:
+            return b"", ""
+
+        for voice_candidate in candidates:
+            try:
+                cmd = ["piper", "--model", voice_candidate, "--output_file", "-"]
+                process = subprocess.Popen(
+                    cmd,
+                    stdin=subprocess.PIPE,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE
+                )
+                try:
+                    stdout_data, stderr_data = process.communicate(
+                        input=text.encode("utf-8"), timeout=5.0
+                    )
+                    if process.returncode == 0 and stdout_data:
+                        return stdout_data, f"piper:{voice_candidate}"
+                    else:
+                        logger.error(f"Piper process failed for '{voice_candidate}': {stderr_data.decode('utf-8', errors='ignore')}")
+                except subprocess.TimeoutExpired:
+                    logger.warning(f"Piper timeout expired for candidate '{voice_candidate}'. Killing process.")
+                    process.kill()
+                    process.communicate()
+                    continue
+            except Exception as e:
+                logger.error(f"Piper synthesis error for candidate '{voice_candidate}': {e}")
+                continue
+
+        return b"", ""
 
     def synthesize(self, text: str, lang_code: str) -> bytes:
-        iso = lang_code.split("-")[0].lower()
-        voice_model = self.voices.get(iso)
-        if not voice_model:
-            return b""
-        try:
-            cmd = ["piper", "--model", voice_model, "--output_file", "-"]
-            process = subprocess.Popen(
-                cmd,
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE
-            )
-            stdout_data, stderr_data = process.communicate(
-                input=text.encode("utf-8"), timeout=15
-            )
-            if process.returncode == 0 and stdout_data:
-                return stdout_data
-            else:
-                logger.error(f"Piper process failed for {iso}: {stderr_data.decode('utf-8', errors='ignore')}")
-                return b""
-        except Exception as e:
-            logger.error(f"Piper synthesis error for {iso}: {e}")
-            return b""
+        audio, _ = self.synthesize_with_meta(text, lang_code)
+        return audio
 
 
 class EdgeTTSEngine(TTSEngine):
@@ -246,10 +269,9 @@ class TTSEngineRouter:
 
         # 1. Attempt Piper if preferred and available
         if primary_pref == "piper" and self.piper_engine.can_handle(iso_lang):
-            audio = self.piper_engine.synthesize(text, iso_lang)
+            audio, voice_name = self.piper_engine.synthesize_with_meta(text, iso_lang)
             if audio:
-                voice = PIPER_VOICES.get(iso_lang, "default")
-                return audio, f"piper:{voice}", ""
+                return audio, voice_name, ""
             logger.warning(f"Piper failed for {iso_lang}, falling back to EdgeTTS...")
 
         # 2. Attempt EdgeTTS (primary for non-piper languages or fallback)

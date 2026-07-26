@@ -59,10 +59,10 @@ from tts_engines import synthesize_speech_sync
 def _encode_header(value: str) -> str:
     return base64.b64encode(value.encode("utf-8")).decode("ascii")
 
-def _do_transcribe(file_path: str, src_lang: str = None) -> str:
-    """Synchronous whisper transcription, to be run in threadpool."""
+def _do_transcribe(file_path: str, src_lang: str = None) -> tuple[str, str]:
+    """Synchronous whisper transcription, returning (text, detected_lang)."""
     if not whisper_model:
-        return ""
+        return "", src_lang or "en"
     try:
         kwargs = {"beam_size": 1}
         # Derive 2-letter ISO code from BCP-47 identifiers (e.g. ja-JP -> ja, hi-IN -> hi)
@@ -72,11 +72,19 @@ def _do_transcribe(file_path: str, src_lang: str = None) -> str:
                 kwargs["language"] = iso_lang
             
         segments, info = whisper_model.transcribe(file_path, **kwargs)
-        logger.info(f"Whisper detected language: {info.language} with probability {info.language_probability}")
-        return "".join([s.text for s in segments]).strip()
+        text = "".join([s.text for s in segments]).strip()
+
+        # Preserve whisper_model.transcribe() metadata language via info.language
+        if info and getattr(info, "language", None) and getattr(info, "language_probability", 0) >= 0.4:
+            detected_lang = info.language
+        else:
+            detected_lang = src_lang if src_lang else (info.language if info and getattr(info, "language", None) else "en")
+
+        logger.info(f"Whisper detected language: {getattr(info, 'language', 'unknown')} (prob: {getattr(info, 'language_probability', 0)}), using: {detected_lang}")
+        return text, detected_lang
     except Exception as e:
         logger.error(f"Transcription failed: {e}")
-        return ""
+        return "", src_lang or "en"
 
 async def translate_text_async(text: str, src_lang: str, tgt_lang: str) -> tuple[str, str]:
     """
@@ -171,7 +179,7 @@ async def handle_transcribe(request: Request):
         temp_file.write(audio_data)
         
     try:
-        text = await run_in_threadpool(_do_transcribe, temp_path)
+        text, _ = await run_in_threadpool(_do_transcribe, temp_path)
         return {"text": text}
     finally:
         if os.path.exists(temp_path):
@@ -199,7 +207,7 @@ async def process_audio(request: Request):
 
     if not whisper_model:
         headers = {"X-Translation-Status": "failed", "X-Translation-Error": _encode_header("Whisper model unavailable")}
-        return audio_streamer.format_audio_response(b"", headers)
+        return audio_streamer.format_audio_response(b"", headers, status_code=503)
 
     with tempfile.NamedTemporaryFile(suffix=".webm", delete=False) as temp_file:
         temp_path = temp_file.name
@@ -207,7 +215,7 @@ async def process_audio(request: Request):
 
     try:
         stt_start = time.time()
-        text = await run_in_threadpool(_do_transcribe, temp_path, src_lang)
+        text, detected_lang = await run_in_threadpool(_do_transcribe, temp_path, src_lang)
         metrics.record_stt((time.time() - stt_start) * 1000)
 
         if not text:
@@ -215,7 +223,7 @@ async def process_audio(request: Request):
             return audio_streamer.format_audio_response(b"", headers)
 
         trans_start = time.time()
-        translated_text, trans_status = await translator_engine.translate(text, src_lang, tgt_lang)
+        translated_text, trans_status = await translator_engine.translate(text, detected_lang, tgt_lang)
         metrics.record_translation((time.time() - trans_start) * 1000)
 
         tts_audio = b""
@@ -233,7 +241,7 @@ async def process_audio(request: Request):
         headers = {
             "X-Original-Text": _encode_header(text),
             "X-Translated-Text": _encode_header(translated_text),
-            "X-Detected-Lang": src_lang,
+            "X-Detected-Lang": detected_lang,
             "X-Source-Lang": src_lang,
             "X-Target-Lang": tgt_lang,
             "X-Translation-Status": trans_status,
@@ -244,6 +252,10 @@ async def process_audio(request: Request):
         }
         if tts_error:
             headers["X-TTS-Error"] = _encode_header(tts_error)
+
+        if translated_text and not tts_audio and tts_error:
+            headers["X-Translation-Status"] = "unsupported_tts"
+            return audio_streamer.format_audio_response(b"", headers, status_code=422)
 
         return audio_streamer.format_audio_response(tts_audio, headers)
     finally:
