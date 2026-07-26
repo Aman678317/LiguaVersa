@@ -45,16 +45,8 @@ try:
 except Exception as e:
     logger.error(f"Failed to load whisper model: {e}")
 
-# Voice Mapping for Piper TTS
-VOICES = {
-    "en": "en_US-lessac-medium",
-    "es": "es_ES-davefx-medium",
-    "fr": "fr_FR-siwis-medium",
-    "hi": "hi_IN-swara-medium",
-    "default": "en_US-lessac-medium"
-}
-
 from tts_engines import synthesize_speech_sync
+from translator import translator_engine
 
 def _encode_header(value: str) -> str:
     return base64.b64encode(value.encode("utf-8")).decode("ascii")
@@ -85,43 +77,6 @@ def _do_transcribe(file_path: str, src_lang: str = None) -> tuple[str, str]:
     except Exception as e:
         logger.error(f"Transcription failed: {e}")
         return "", src_lang or "en"
-
-async def translate_text_async(text: str, src_lang: str, tgt_lang: str) -> tuple[str, str]:
-    """
-    Translates text using Gemini.
-    Returns: (translated_text, status) where status is 'ok', 'degraded', or 'failed'
-    """
-    if not text.strip():
-        return text, "ok"
-        
-    src_iso = src_lang.split("-")[0].lower() if src_lang else ""
-    tgt_iso = tgt_lang.split("-")[0].lower() if tgt_lang else ""
-    
-    if src_iso == tgt_iso or src_lang == tgt_lang:
-        return text, "ok"
-
-    if not gemini_model:
-        logger.warning("Cannot translate: GEMINI_API_KEY is not set.")
-        return text, "degraded"
-
-    try:
-        prompt = (
-            f"Translate the following text from {src_lang} to {tgt_lang}.\n"
-            "Return ONLY the translated text.\n"
-            "Do not explain.\n"
-            "Keep punctuation intact.\n"
-            "Do not translate names.\n\n"
-            f"{text}"
-        )
-        response = await run_in_threadpool(gemini_model.generate_content, prompt)
-        translated = response.text.strip() if response and response.text else ""
-        if translated:
-            return translated, "ok"
-        else:
-            return text, "degraded"
-    except Exception as e:
-        logger.error(f"Gemini translation failed: {e}")
-        return text, "degraded"
 
 class TranslateRequest(BaseModel):
     text: str
@@ -165,7 +120,7 @@ User Question:
 
 @app.post("/translate")
 async def handle_translate(req: TranslateRequest):
-    translated, status = await translate_text_async(req.text, req.sourceLang, req.targetLang)
+    translated, status = await translator_engine.translate(req.text, req.sourceLang, req.targetLang)
     return {"translatedText": translated, "status": status}
 
 @app.post("/transcribe")

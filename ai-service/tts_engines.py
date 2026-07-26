@@ -117,6 +117,26 @@ def convert_audio_to_wav(input_bytes: bytes) -> bytes:
         return input_bytes
 
 
+def is_piper_model_installed(voice_name: str) -> bool:
+    """Checks whether the .onnx model file for a given Piper voice exists locally."""
+    possible_dirs = [
+        os.getenv("PIPER_DATA_DIR", ""),
+        os.path.expanduser("~/.local/share/piper"),
+        os.path.expanduser("~/.cache/piper"),
+        "/root/.local/share/piper",
+        os.getcwd(),
+        "."
+    ]
+    for d in possible_dirs:
+        if not d:
+            continue
+        p1 = os.path.join(d, f"{voice_name}.onnx")
+        p2 = os.path.join(d, voice_name, f"{voice_name}.onnx")
+        if os.path.isfile(p1) or os.path.isfile(p2):
+            return True
+    return False
+
+
 class TTSEngine(ABC):
     """Abstract Base Class for TTS Engines."""
 
@@ -148,6 +168,10 @@ class PiperEngine(TTSEngine):
             return b"", ""
 
         for voice_candidate in candidates:
+            if not is_piper_model_installed(voice_candidate):
+                logger.warning(f"Piper voice '{voice_candidate}' not found locally, skipping (will not attempt network fetch)")
+                continue
+
             try:
                 cmd = ["piper", "--model", voice_candidate, "--output_file", "-"]
                 process = subprocess.Popen(

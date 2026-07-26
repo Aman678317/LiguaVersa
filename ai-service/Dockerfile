@@ -14,7 +14,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 RUN python3 -m piper.download_voices en_US-lessac-medium && \
     python3 -m piper.download_voices es_ES-davefx-medium && \
     python3 -m piper.download_voices fr_FR-siwis-medium && \
-    python3 -m piper.download_voices hi_IN-swara-medium
+    python3 -m piper.download_voices hi_IN-pratham-medium && \
+    python3 -m piper.download_voices hi_IN-priyamvada-medium && \
+    python3 -m piper.download_voices zh_CN-huayan-medium
 
 COPY . .
 
