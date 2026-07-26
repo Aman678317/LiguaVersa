@@ -188,7 +188,7 @@ async def process_audio(request: Request):
         if translated_text:
             tts_start = time.time()
             tts_audio, tts_engine, tts_error = await run_in_threadpool(tts_engine_wrapper.synthesize, translated_text, tgt_lang)
-            metrics.record_tts((time.time() - tts_start) * 1000)
+            metrics.record_tts((time.time() - tts_start) * 1000, tts_engine)
 
         m_summary = metrics.finalize()
         tts_available = "true" if (tts_audio and len(tts_audio) > 0) else "false"

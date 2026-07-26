@@ -137,6 +137,26 @@ def is_piper_model_installed(voice_name: str) -> bool:
     return False
 
 
+def get_installed_piper_languages() -> set[str]:
+    """Scans local environment and model directories for available Piper models per language ISO code."""
+    if shutil.which("piper") is None:
+        logger.info("Piper CLI binary not found in PATH; Piper TTS disabled.")
+        return set()
+
+    installed = set()
+    for lang, candidates in PIPER_VOICE_CANDIDATES.items():
+        if lang == "default":
+            continue
+        if any(is_piper_model_installed(cand) for cand in candidates):
+            installed.add(lang)
+
+    logger.info(f"Installed Piper languages set on startup: {installed}")
+    return installed
+
+
+INSTALLED_PIPER_LANGS = get_installed_piper_languages()
+
+
 class TTSEngine(ABC):
     """Abstract Base Class for TTS Engines."""
 
@@ -158,8 +178,8 @@ class PiperEngine(TTSEngine):
         self.voice_candidates = voice_candidates
 
     def can_handle(self, lang_code: str) -> bool:
-        iso = lang_code.split("-")[0].lower()
-        return iso in self.voice_candidates and shutil.which("piper") is not None
+        iso = lang_code.split("-")[0].lower() if lang_code else ""
+        return iso in INSTALLED_PIPER_LANGS and shutil.which("piper") is not None
 
     def synthesize_with_meta(self, text: str, lang_code: str) -> tuple[bytes, str]:
         iso = lang_code.split("-")[0].lower()
@@ -169,7 +189,7 @@ class PiperEngine(TTSEngine):
 
         for voice_candidate in candidates:
             if not is_piper_model_installed(voice_candidate):
-                logger.warning(f"Piper voice '{voice_candidate}' not found locally, skipping (will not attempt network fetch)")
+                logger.warning(f"Piper voice '{voice_candidate}' not found locally, skipping")
                 continue
 
             try:
@@ -287,38 +307,44 @@ class TTSEngineRouter:
         if not text or not text.strip():
             return b"", "none", "Empty text"
 
-        iso_lang = target_lang.split("-")[0].lower() if target_lang else "en"
-        config = LANGUAGE_ENGINE_MAP.get(iso_lang, {})
-        primary_pref = config.get("primary", "edge-tts")
+        if not target_lang or not isinstance(target_lang, str):
+            return b"", "failed", "Invalid language code provided"
 
-        # 1. Attempt Piper if preferred and available
-        if primary_pref == "piper" and self.piper_engine.can_handle(iso_lang):
+        iso_lang = target_lang.split("-")[0].lower()
+
+        # Validate language code
+        valid_iso_codes = set(EDGE_VOICES.keys()).union(set(PIPER_VOICE_CANDIDATES.keys()))
+        if iso_lang not in valid_iso_codes and target_lang.lower() not in EDGE_VOICES:
+            logger.warning(f"Invalid or unsupported language code: '{target_lang}'")
+            return b"", "failed", f"Invalid language code '{target_lang}'"
+
+        # 1. Attempt Piper if language is in INSTALLED_PIPER_LANGS
+        if iso_lang in INSTALLED_PIPER_LANGS and self.piper_engine.can_handle(iso_lang):
             audio, voice_name = self.piper_engine.synthesize_with_meta(text, iso_lang)
             if audio:
+                logger.info(f"TTS request for '{target_lang}' handled by Piper engine ({voice_name})")
                 return audio, voice_name, ""
-            logger.warning(f"Piper failed for {iso_lang}, falling back to EdgeTTS...")
+            logger.warning(f"Piper failed for '{iso_lang}', falling back to EdgeTTS...")
 
         # 2. Attempt EdgeTTS (primary for non-piper languages or fallback)
         if self.edge_engine.can_handle(iso_lang):
             audio = self.edge_engine.synthesize(text, target_lang)
             if audio:
-                voice = EDGE_VOICES.get(iso_lang, EDGE_VOICES["default"])
-                return audio, f"edge-tts:{voice}", ""
-            logger.warning(f"EdgeTTS failed for {target_lang}, falling back to gTTS...")
+                voice = EDGE_VOICES.get(iso_lang, EDGE_VOICES.get(target_lang.lower(), EDGE_VOICES.get("default")))
+                engine_id = f"edge-tts:{voice}"
+                logger.info(f"TTS request for '{target_lang}' handled by Edge-TTS engine ({engine_id})")
+                return audio, engine_id, ""
+            logger.warning(f"EdgeTTS failed for '{target_lang}', falling back to gTTS...")
 
-        # 3. Attempt Piper as secondary fallback if supported
-        if primary_pref != "piper" and self.piper_engine.can_handle(iso_lang):
-            audio = self.piper_engine.synthesize(text, iso_lang)
-            if audio:
-                voice = PIPER_VOICES.get(iso_lang, "default")
-                return audio, f"piper:{voice}", ""
-
-        # 4. Attempt gTTS as final fallback
+        # 3. Attempt gTTS as final fallback
         if self.gtts_engine.can_handle(iso_lang):
             audio = self.gtts_engine.synthesize(text, iso_lang)
             if audio:
-                return audio, f"gtts:{iso_lang}", ""
+                engine_id = f"gtts:{iso_lang}"
+                logger.info(f"TTS request for '{target_lang}' handled by gTTS engine ({engine_id})")
+                return audio, engine_id, ""
 
+        logger.error(f"All TTS engines failed for target language '{target_lang}'")
         return b"", "failed", f"All TTS engines failed for target language '{target_lang}'"
 
 
